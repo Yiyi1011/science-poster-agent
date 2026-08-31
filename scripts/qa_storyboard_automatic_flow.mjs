@@ -1,0 +1,114 @@
+// Actual automatic endpoint, isolated TEMP backend; never mutates the user's database.
+import {pathToFileURL,fileURLToPath} from 'node:url';
+import {dirname,resolve} from 'node:path';
+import {writeFile,mkdir,readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const {chromium}=await import(pathToFileURL(resolve(process.argv[2])).href);
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const output=resolve(root,'evidence/storyboard-editor-qa/automatic-first');await mkdir(output,{recursive:true});
+const base='http://127.0.0.1:5173',api='http://127.0.0.1:8123/api/videos/editor/solar';
+const movie=resolve(root,'frontend/public/solar-animation/media/solar-messengers-narrated-v001.mp4');
+const hash=async()=>createHash('sha256').update(await readFile(movie)).digest('hex');
+const originalHash=await hash();
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const checks={},errors=[],outside=[],runRequests=[];
+let loseNextResponse=false;
+try{
+  const page=await browser.newPage({viewport:{width:1440,height:1050},acceptDownloads:true});
+  page.on('pageerror',error=>errors.push(error.message));
+  page.on('request',request=>{if(!request.url().startsWith(base+'/'))outside.push(request.url());});
+  await page.route('**/api/videos/editor/solar**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path.endsWith('/auto-run'))runRequests.push(route.request().postDataJSON());
+    const response=await route.fetch({url:'http://127.0.0.1:8123'+path});
+    if(path.endsWith('/auto-run')&&loseNextResponse){loseNextResponse=false;await route.abort('failed');}
+    else await route.fulfill({response});
+  });
+  let original=await(await page.request.get(api)).json();
+  if(original.analysis.requires_recomposition){
+    const baseline=await(await page.request.get(api+'/versions/0')).json();
+    assert.equal((await page.request.put(api,{data:{expected_version:original.version,scenes:baseline.scenes,note:'Isolated automatic-flow QA reset'}})).status(),200);
+    original=await(await page.request.get(api)).json();
+  }
+  await page.goto(base+'/?view=storyboard');await page.locator('.editor-impact').waitFor();
+  assert.equal(await page.locator('.manual-editor').evaluate(el=>el.open),false);
+  assert.equal(await page.locator('.automation-history').evaluate(el=>el.open),false);
+  assert.equal(runRequests.length,0,'No automatic writes or calls on page open');
+  const runButton=page.getByRole('button',{name:'自动检查并修正',exact:true});
+  await runButton.click();
+  await page.waitForFunction(()=>document.querySelector('.editor-message')?.textContent.includes('未创建重复版本'));
+  assert.equal((await(await page.request.get(api)).json()).version,original.version);
+  assert.match(await page.locator('.correction-summary').innerText(),/未发现可安全自动修正/);
+  checks.automatic_primary_manual_collapsed_noop_logged_without_fake_revision=true;
+  await page.locator('.automation-history > summary').click();
+  await page.getByRole('button',{name:'载入长字幕练习',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.editor-message')?.textContent.includes('不是模型错误证据'));
+  const rawText=await page.getByLabel('画面要点字幕',{exact:false}).inputValue();
+  assert.equal(await page.locator('.manual-editor').evaluate(el=>el.open),false);
+  // Simulate a lost response AFTER the real server committed the run.
+  loseNextResponse=true;
+  await runButton.click();
+  await page.getByRole('alert').filter({hasText:'连接中断'}).waitFor();
+  assert.equal((await(await page.request.get(api)).json()).version,original.version+1);
+  assert.equal(await page.getByLabel('画面要点字幕',{exact:false}).inputValue(),rawText);
+  await runButton.click();
+  await page.waitForFunction(()=>document.querySelector('.editor-message')?.textContent.includes('已自动保存'));
+  assert.equal(runRequests.at(-1).run_id,runRequests.at(-2).run_id);
+  checks.lost_response_retry_uses_same_id_without_duplicate_save=true;
+  const saved=await(await page.request.get(api)).json();
+  assert.equal(saved.version,original.version+1);
+  assert.equal(saved.automation_runs[0].changes.length,2);
+  assert.equal(saved.analysis.tts_scene_count,0);
+  assert.equal(saved.analysis.cloud_calls,0);
+  assert.equal(saved.automation_runs[0].steps.length,4);
+  assert.equal(saved.automation_runs[0].input_edits_before_automation.length,1);
+  assert.equal(saved.auto_correction.verified_by_server,true);
+  assert.match(await page.locator('.correction-summary').innerText(),/2项自动修正/);
+  assert.equal(await page.locator('.correction-summary details').evaluate(el=>el.open),false);
+  const after=await page.getByLabel('画面要点字幕',{exact:false}).inputValue();
+  assert.equal(after.replaceAll('\n',''),rawText.replaceAll('\n',''));
+  assert.equal(await page.locator('.scene-readonly .editor-auto-mark').count(),2);
+  assert.equal(await page.locator('.manual-editor').evaluate(el=>el.open),false);
+  assert.equal(await page.getByRole('button',{name:/应用这/}).count(),0);
+  assert.equal(await page.locator('video').getAttribute('src'),original.media_url);
+  checks.one_action_applies_saves_and_leaves_real_diffs_without_manual_edit=true;
+  await page.locator('.automation-history > summary').click();
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.screenshot({path:resolve(output,'01-automatic-summary-desktop.png'),fullPage:true});
+  await page.getByText('查看修改前后',{exact:true}).click();
+  assert.equal(await page.locator('.correction-diff').count(),2);
+  await page.locator('.correction-summary').screenshot({path:resolve(output,'02-actual-before-after.png')});
+  await page.reload();await page.locator('.correction-stage').filter({hasText:'自动流程已完成'}).waitFor();
+  assert.match(await page.locator('.correction-summary').innerText(),/2项自动修正/);
+  assert.equal(await page.locator('.correction-summary details').evaluate(el=>el.open),false);
+  checks.saved_run_survives_reload_with_diffs_collapsed=true;
+  await page.locator('.editor-scenes > button').nth(2).click();
+  await page.locator('.manual-editor > summary').click();
+  await page.getByLabel('镜头标题',{exact:true}).fill('光先到（手动微调）');
+  await page.getByLabel('本次修改说明',{exact:true}).fill('QA：手动改标题，不冒充自动修正');
+  await page.getByRole('button',{name:'保存草稿（不生成）',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.editor-message')?.textContent.includes('已保存草稿'));
+  assert.match(await page.locator('.correction-stage').innerText(),/历史运行记录/);
+  assert.equal((await(await page.request.get(api)).json()).auto_correction,null);
+  assert.equal(await page.locator('.scene-readonly .editor-auto-mark').count(),0);
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'导出当前草稿 JSON',exact:true}).click();
+  const download=await downloadPromise;
+  const exported=JSON.parse(await readFile(await download.path(),'utf8'));
+  assert.ok(exported.automation_runs.some(run=>run.run_id===saved.automation_runs[0].run_id));
+  checks.manual_optional_save_is_separate_and_run_history_exportable=true;
+  await page.locator('.manual-editor > summary').click();
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:resolve(output,'03-mobile-automatic-first.png'),fullPage:true});
+  checks.mobile_layout_has_no_horizontal_overflow=true;
+  assert.equal(await hash(),originalHash);
+  assert.equal(errors.length,0);assert.equal(outside.length,0);
+  const report={status:'passed',checks,page_errors:errors,external_requests:outside,cloud_calls:0,
+    input_provenance:'Explicit deliberately-long test subtitle, not evidence of a model error',
+    storage_scope:'isolated TEMP database',original_movie_sha256:originalHash,run:saved.automation_runs[0]};
+  await writeFile(resolve(output,'report.json'),JSON.stringify(report,null,2));
+  console.log(JSON.stringify({status:report.status,checks,cloud_calls:0},null,2));
+}finally{await browser.close();}

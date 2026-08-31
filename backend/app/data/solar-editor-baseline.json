@@ -1,0 +1,16 @@
+{
+  "project_id": "solar-messengers",
+  "title": "太阳的三位信使",
+  "media_url": "/solar-animation/media/solar-messengers-narrated-v001.mp4",
+  "media_sha256": "cb0dfc092571afe727f0c99b471da8bb1459e6514b3c881312e22b652956ba8f",
+  "acceptance": "用户认可当前试听版；不等同专家终审或多人受众测试",
+  "scenes": [
+    {"scene_id":"SW-A03-1","title":"一个问题","duration_seconds":9.125,"narration":"太阳离我们那么远，突然变得活跃，地球会立刻受影响吗？有的影响几分钟就到，有的要等几天。","subtitle_cards":["太阳活跃，地球会立刻受影响吗？","有的几分钟，有的要几天"],"visual_direction":"太阳与地球分居两侧，中间出现问号和移动光点，引出传播时间的疑问。","source_ids":["S-SW-003"],"boundary":"这里是传播过程的演示，不是针对某次事件的风险预报。","audio_duration_seconds":8.32,"media_start_seconds":0},
+    {"scene_id":"SW-A03-2","title":"三位信使","duration_seconds":10.083333333333334,"narration":"把它们想成三位信使：光、高速粒子，还有太阳抛出的物质云团。它们不同速，也不一定一起出发。","subtitle_cards":["光、粒子、物质云团","不同速度，也有不同影响","一次事件不一定三者都有"],"visual_direction":"三条平行跑道分别表现光、高速粒子和物质云团，使用黄、橙、青三种颜色；跑道只作比喻。","source_ids":["S-SW-003","S-SW-005"],"boundary":"信使和跑道是比喻，不代表真实形状或准确的速度比例。","audio_duration_seconds":9.28,"media_start_seconds":9.125},
+    {"scene_id":"SW-A03-3","title":"光先到","duration_seconds":9.375,"narration":"第一位是耀斑发出的辐射，像光一样快。约八分钟后到达地球，可能让向阳一侧的部分短波通信听不清。","subtitle_cards":["约8分钟：从太阳出发算起","向阳一侧的高层大气受到扰动","部分短波通信可能听不清"],"visual_direction":"光信使从太阳奔向地球，突出向阳一侧；无线电图标表现短波信号受扰，而不是全球网络中断。","source_ids":["S-SW-001","S-SW-003"],"boundary":"不是看到耀斑后还有8分钟准备时间；也不代表所有手机和网络中断。","audio_duration_seconds":8.56,"media_start_seconds":19.208333333333332},
+    {"scene_id":"SW-A03-4","title":"粒子随后","duration_seconds":9.458333333333334,"narration":"接着是高速粒子，通常几十分钟到数小时。它们主要让卫星、航天员和部分高纬度航班多加留意。","subtitle_cards":["粒子通常几十分钟到数小时抵达","卫星、航天员需要留意","地面与太空的风险不能混为一谈"],"visual_direction":"橙色粒子移向卫星，显示关注粒子风险的提示牌；地球位于下方，区分地面与太空风险。","source_ids":["S-SW-003","S-SW-008","S-SW-002"],"boundary":"时间随粒子与事件条件变化；图中的提示牌不是实体保护盾。","audio_duration_seconds":8.64,"media_start_seconds":28.583333333333332},
+    {"scene_id":"SW-A03-5","title":"云团更慢","duration_seconds":12.25,"narration":"物质云团更慢，大约十八小时到数天。是否朝向地球、速度和磁场方向，都影响它的作用。强耀斑不一定造成强地磁暴。","subtitle_cards":["太阳物质云团：约18小时到数天","要先看是否朝向地球","速度和磁场方向也很重要","强耀斑，不一定有强地磁暴"],"visual_direction":"青色物质云团缓慢移向地球；下方三张提示卡分别表示朝向、速度和磁场方向，不绘制实体闸门。","source_ids":["S-SW-003","S-SW-004","S-SW-005"],"boundary":"云团是携带磁场的等离子体，不是水汽云；到达不代表一定导致故障。","audio_duration_seconds":11.44,"media_start_seconds":38.041666666666664},
+    {"scene_id":"SW-A03-6","title":"持续监测","duration_seconds":8.083333333333334,"narration":"科学家持续观察太阳和近地环境。监测与预警，帮助相关系统评估风险、做准备。","subtitle_cards":["持续观察，评估风险","预警帮助相关系统准备"],"visual_direction":"从太阳到观测卫星再到数据屏幕，以移动数据点表现观测、传回数据、评估与预警。","source_ids":["S-SW-003"],"boundary":"预警有不确定性；并非所有影响都能提前准确预测。","audio_duration_seconds":7.28,"media_start_seconds":50.291666666666664},
+    {"scene_id":"SW-A03-7","title":"记住三问","duration_seconds":9.041666666666666,"narration":"记住三个问题：是谁，多久到，影响什么？分清三种信使，才能理解太阳带来的不同影响。","subtitle_cards":["是谁？多久到？影响什么？","分清三种信使，不必过度恐慌"],"visual_direction":"回到三条信使跑道，重现三种角色及其时间尺度，以三个问题收束科普主线。","source_ids":["S-SW-001","S-SW-003","S-SW-005"],"boundary":"本镜为总结，比喻不代表真实比例，不能据此预测具体事件。","audio_duration_seconds":8.24,"media_start_seconds":58.375}
+  ]
+}

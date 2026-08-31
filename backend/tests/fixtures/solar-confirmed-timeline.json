@@ -1,0 +1,110 @@
+{
+  "description": "Test fixture extracted from the accepted 2026-08-31 narration timeline; excludes cloud request metadata, private file paths and costs.",
+  "frames": 1618,
+  "scenes": [
+    {
+      "id": "SW-A03-1",
+      "start_seconds": 0,
+      "duration_seconds": 9.125,
+      "narration_draft": "太阳离我们那么远，突然变得活跃，地球会立刻受影响吗？有的影响几分钟就到，有的要等几天。",
+      "subtitle_cards": [
+        "太阳活跃，地球会立刻受影响吗？",
+        "有的几分钟，有的要几天"
+      ],
+      "source_ids": [
+        "S-SW-003"
+      ]
+    },
+    {
+      "id": "SW-A03-2",
+      "start_seconds": 9.125,
+      "duration_seconds": 10.083333333333334,
+      "narration_draft": "把它们想成三位信使：光、高速粒子，还有太阳抛出的物质云团。它们不同速，也不一定一起出发。",
+      "subtitle_cards": [
+        "光、粒子、物质云团",
+        "不同速度，也有不同影响",
+        "一次事件不一定三者都有"
+      ],
+      "source_ids": [
+        "S-SW-003",
+        "S-SW-005"
+      ]
+    },
+    {
+      "id": "SW-A03-3",
+      "start_seconds": 19.208333333333332,
+      "duration_seconds": 9.375,
+      "narration_draft": "第一位是耀斑发出的辐射，像光一样快。约八分钟后到达地球，可能让向阳一侧的部分短波通信听不清。",
+      "subtitle_cards": [
+        "约8分钟：从太阳出发算起",
+        "向阳一侧的高层大气受到扰动",
+        "部分短波通信可能听不清"
+      ],
+      "source_ids": [
+        "S-SW-001",
+        "S-SW-003"
+      ]
+    },
+    {
+      "id": "SW-A03-4",
+      "start_seconds": 28.583333333333332,
+      "duration_seconds": 9.458333333333334,
+      "narration_draft": "接着是高速粒子，通常几十分钟到数小时。它们主要让卫星、航天员和部分高纬度航班多加留意。",
+      "subtitle_cards": [
+        "粒子通常几十分钟到数小时抵达",
+        "卫星、航天员需要留意",
+        "地面与太空的风险不能混为一谈"
+      ],
+      "source_ids": [
+        "S-SW-003",
+        "S-SW-008",
+        "S-SW-002"
+      ]
+    },
+    {
+      "id": "SW-A03-5",
+      "start_seconds": 38.041666666666664,
+      "duration_seconds": 12.25,
+      "narration_draft": "物质云团更慢，大约十八小时到数天。是否朝向地球、速度和磁场方向，都影响它的作用。强耀斑不一定造成强地磁暴。",
+      "subtitle_cards": [
+        "太阳物质云团：约18小时到数天",
+        "要先看是否朝向地球",
+        "速度和磁场方向也很重要",
+        "强耀斑，不一定有强地磁暴"
+      ],
+      "source_ids": [
+        "S-SW-003",
+        "S-SW-004",
+        "S-SW-005"
+      ]
+    },
+    {
+      "id": "SW-A03-6",
+      "start_seconds": 50.291666666666664,
+      "duration_seconds": 8.083333333333334,
+      "narration_draft": "科学家持续观察太阳和近地环境。监测与预警，帮助相关系统评估风险、做准备。",
+      "subtitle_cards": [
+        "持续观察，评估风险",
+        "预警帮助相关系统准备"
+      ],
+      "source_ids": [
+        "S-SW-003"
+      ]
+    },
+    {
+      "id": "SW-A03-7",
+      "start_seconds": 58.375,
+      "duration_seconds": 9.041666666666666,
+      "narration_draft": "记住三个问题：是谁，多久到，影响什么？分清三种信使，才能理解太阳带来的不同影响。",
+      "subtitle_cards": [
+        "是谁？多久到？影响什么？",
+        "分清三种信使，不必过度恐慌"
+      ],
+      "source_ids": [
+        "S-SW-001",
+        "S-SW-003",
+        "S-SW-005"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>太阳的三位信使 · 卡通动态分镜</title>
+  <link rel="stylesheet" href="./player.css" />
+</head>
+<body>
+  <main>
+    <header><div class="kicker">SCIVIS · 动画工作台 / 本地零调用</div><h1>太阳的三位信使</h1><p>先看懂，再做成片。84秒卡通动态分镜 · 暂无旁白 · 非最终视频</p></header>
+    <p><a href="./voiced.html">新版已配音：观看约67秒卡通有声试听版 →</a></p>
+    <section class="player" aria-label="卡通动态分镜播放器">
+      <div class="stage"><canvas id="canvas" width="960" height="540" aria-label="太阳、地球与三类信使的卡通动画；画面内容可在下方脚本中阅读"></canvas></div>
+      <div class="caption"><span id="caption"></span></div>
+      <div class="controls"><button id="play" type="button">播放</button><button id="prev" type="button" aria-label="上一镜">上一镜</button><button id="next" type="button" aria-label="下一镜">下一镜</button><label class="scrub"><span class="sr-only">播放位置（秒）</span><input id="seek" type="range" min="0" max="84" step="0.1" value="0" /></label><output id="clock">0:00 / 1:24</output></div>
+    </section>
+    <nav id="chapters" aria-label="七个分镜"></nav>
+    <section class="notes"><div><span class="kicker" id="scene-number"></span><h2 id="scene-title"></h2><p id="narration"></p><p class="boundary" id="boundary"></p></div><aside><h3>这轮请只判断三件事</h3><ol><li>不看海报，能否看懂三位信使？</li><li>还有哪些句子不够通俗？</li><li>哪个镜头太快或太抽象？</li></ol><p>画面为原创Canvas代码动画，不是Qwen/Wan生成成片。不会自动调用模型、播放旧旁白或上传你的反馈。</p></aside></section>
+    <details><summary>来源与科学边界</summary><p>角色、跑道和光点均为比喻；大小、距离和播放速度不按真实比例。一次太阳事件不一定同时出现三类信使；时间不是固定预报。</p><ul><li><a href="https://www.spaceweather.gov/phenomena/solar-flares-radio-blackouts" target="_blank" rel="noopener noreferrer">NOAA：耀斑辐射与向阳面短波通信</a></li><li><a href="https://www.esa.int/Science_Exploration/Space_Science/Space_weather" target="_blank" rel="noopener noreferrer">ESA：三类传播过程与空间天气监测</a></li><li><a href="https://www.esa.int/Space_Safety/Space_weather/Sun_fires_off_largest_flare_of_current_solar_cycle" target="_blank" rel="noopener noreferrer">ESA：强耀斑不一定伴随物质抛射</a></li></ul><p>本片参考已有本地知识库事实与条件边界；后续配音、关键帧生成和正式发布均另行审核。</p></details>
+  </main>
+  <script src="./player.js"></script>
+</body>
+</html>

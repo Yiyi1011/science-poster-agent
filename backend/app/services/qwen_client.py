@@ -34,7 +34,7 @@ class QwenClient:
     async def studio_json(self, prompt: str, data: dict, purpose: str) -> tuple[dict, dict]:
         from app.services.model_policy import guard_text_budget
         self.settings.validate_for_real_ai()
-        guard_text_budget(self.settings)
+        guard_text_budget(self.settings, reserve_cny=1.0)
         async with httpx.AsyncClient(timeout=120, follow_redirects=False) as client:
             response = await client.post(
                 f"{self.settings.dashscope_base_url}/chat/completions",
@@ -43,7 +43,7 @@ class QwenClient:
                       "messages": [{"role": "system", "content": prompt},
                                    {"role": "user", "content": json.dumps(data, ensure_ascii=False)}],
                       "response_format": {"type": "json_object"}, "temperature": 0.2,
-                      "enable_thinking": False, "max_tokens": 5000},
+                      "enable_thinking": False, "max_tokens": 7500},
             )
             response.raise_for_status()
         body = response.json()
@@ -55,7 +55,7 @@ class QwenClient:
             "provider": "阿里云百炼", "model": self.settings.qwen_text_model,
             "response_model": body.get("model", ""), "region": self.settings.region,
             "request_id": body.get("id", ""), "purpose": purpose,
-            "prompt_version": "studio-v1.1", "prompt_sha256": sha256(prompt.encode()).hexdigest(), "usage": body.get("usage", {}),
+            "prompt_version": "studio-v1.2-public", "prompt_sha256": sha256(prompt.encode()).hexdigest(), "usage": body.get("usage", {}),
         }
 
     async def create_poster_plan(self, request: PosterRequest) -> dict:

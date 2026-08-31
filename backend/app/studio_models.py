@@ -32,6 +32,7 @@ class ProjectInput(StrictModel):
     topic: str = Field(min_length=2, max_length=160)
     audience: str = Field(default="普通公众", min_length=2, max_length=50)
     sources: list[Source] = Field(default_factory=list, max_length=6)
+    auto_sources: bool = False
 
     @model_validator(mode="after")
     def source_limits(self):
@@ -69,6 +70,28 @@ class Scene(StrictModel):
     narration: str = Field(min_length=8, max_length=180)
     visual_action: str = Field(min_length=8, max_length=160)
     claim_ids: list[str] = Field(min_length=1, max_length=6)
+    role: Literal["hook", "example", "mechanism", "process", "misconception", "boundary", "takeaway"] | None = None
+
+
+class PublicCard(StrictModel):
+    heading: str = Field(min_length=2, max_length=12)
+    body: str = Field(min_length=8, max_length=64)
+    claim_ids: list[str] = Field(min_length=1, max_length=4)
+
+
+class VisualNode(StrictModel):
+    label: str = Field(min_length=2, max_length=10)
+    detail: str = Field(min_length=6, max_length=32)
+    icon: Literal["chat", "book", "search", "check", "clock", "spark", "question"]
+    claim_ids: list[str] = Field(min_length=1, max_length=4)
+
+
+class PublicPoster(StrictModel):
+    """Public copy is separate from verbatim evidence; every element is traceable."""
+    cards: list[PublicCard] = Field(min_length=2, max_length=3)
+    example: PublicCard
+    caution: PublicCard
+    nodes: list[VisualNode] = Field(min_length=2, max_length=4)
 
 
 class StudioDraft(StrictModel):
@@ -76,7 +99,9 @@ class StudioDraft(StrictModel):
     takeaway: str = Field(min_length=8, max_length=80)
     claims: list[Claim] = Field(min_length=1, max_length=4)
     diagram: Diagram
-    scenes: list[Scene] = Field(min_length=3, max_length=5)
+    # Old three-scene projects remain readable; new generation has a separate quality gate.
+    scenes: list[Scene] = Field(min_length=3, max_length=8)
+    public_poster: PublicPoster | None = None
 
 
 class Finding(StrictModel):
@@ -94,3 +119,4 @@ class RunInput(StrictModel):
     request_id: UUID
     expected_version: int = Field(ge=0)
     feedback: str = Field(default="", max_length=1000)
+    rebuild: bool = False

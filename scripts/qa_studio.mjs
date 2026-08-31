@@ -4,7 +4,7 @@ import {resolve} from 'node:path';
 import {mkdir, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {chromium} = await import(pathToFileURL(resolve(process.argv[2])).href);
-const out = resolve('evidence/studio-v020/browser');
+const out = resolve(process.argv[3] || 'evidence/studio-v030/browser-mock');
 await mkdir(out, {recursive:true});
 const browser = await chromium.launch({channel:'msedge', headless:true});
 const errors = [], checks = {};

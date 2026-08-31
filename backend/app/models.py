@@ -113,6 +113,7 @@ class PublicConfig(BaseModel):
     mock_ai: bool
     region: str
     text_model: str
+    studio_model: str = "qwen3-max"
     knowledge_app_enabled: bool
     retrieval_min_score: float
 

@@ -22,6 +22,7 @@ def connection():
     db.row_factory = sqlite3.Row
     db.executescript("""
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, input TEXT NOT NULL, created TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS research(project TEXT PRIMARY KEY, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS versions(project TEXT, number INTEGER, payload TEXT NOT NULL,
             PRIMARY KEY(project, number));
         CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, project TEXT, request TEXT, state TEXT,
@@ -57,8 +58,16 @@ def get_project(project_id):
             raise KeyError("项目不存在")
         versions = db.execute("SELECT payload FROM versions WHERE project=? ORDER BY number", (project_id,)).fetchall()
         runs = db.execute("SELECT id,state,stage,error,updated FROM runs WHERE project=? ORDER BY updated", (project_id,)).fetchall()
+        research = db.execute("SELECT payload FROM research WHERE project=?", (project_id,)).fetchone()
     return {"id": row["id"], "input": json.loads(row["input"]), "created_at": row["created"],
-            "versions": [json.loads(v["payload"]) for v in versions], "runs": [dict(r) for r in runs]}
+            "versions": [json.loads(v["payload"]) for v in versions], "runs": [dict(r) for r in runs],
+            "research": json.loads(research["payload"]) if research else None}
+
+
+def save_research(project_id, payload):
+    # Separate immutable provenance snapshot; original user input is never overwritten.
+    with connection() as db:
+        db.execute("INSERT INTO research VALUES(?,?)", (project_id, json.dumps(payload, ensure_ascii=False)))
 
 
 def reserve(project_id, request):

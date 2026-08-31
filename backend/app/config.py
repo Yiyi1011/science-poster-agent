@@ -50,6 +50,10 @@ class Settings:
     ).rstrip("/")
     retrieval_min_score: float = float(os.getenv("RETRIEVAL_MIN_SCORE", "0.50"))
     qwen_text_model: str = os.getenv("QWEN_TEXT_MODEL", "qwen-plus")
+    qwen_studio_model: str = os.getenv("QWEN_STUDIO_MODEL", "qwen3-max")
+    # Conservative upper-tier estimates; not a substitute for the provider bill.
+    qwen_studio_input_price: float = float(os.getenv("QWEN_STUDIO_INPUT_PRICE", "7"))
+    qwen_studio_output_price: float = float(os.getenv("QWEN_STUDIO_OUTPUT_PRICE", "28"))
     qwen_image_model: str = os.getenv("QWEN_IMAGE_MODEL") or "qwen-image-3.0"
     qwen_image_output_price: float = float(
         os.getenv("QWEN_IMAGE_OUTPUT_PRICE", "0.18")

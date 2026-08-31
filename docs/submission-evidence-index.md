@@ -4,6 +4,8 @@
 
 | 模板/评审关注点 | 可提交证据 | 当前状态 |
 |---|---|---|
+| v0.3.0通俗表达、6—8镜与只提问题检索 | `docs/versions/process/v0.3.0-preview.md`、`evidence/studio-v030/`及`browser-real/report.json` | 真实三案最新6/7/7镜；学习案有时间范围提醒。AI与学习案含明确开发者复核反馈，不冒充无人干预成功率；月球检索失败记录保留 |
+| 过程代码与最终代码分隔 | `docs/versions/README.md`、`docs/CODE_MAP.md`、`VERSION_NOTES.md` | 标签及每版简述可查，旧标签不改；当前只有制作预览版，没有最终交付标签 |
 | 跨主题独立项目与Qwen语义修订 | `evidence/studio-v020/report.json`、`refined-*.json`、项目完整JSON/草稿ZIP、`docs/studio-guide.md` | 两个真实qwen-plus项目；生成、审核改写与复检10次文本调用，首轮各4处修改，开发者提出边界问题后分别再改7处/11处。留存原稿，不冒充专家或公众评测；通用视频仍为分镜 |
 | 新工作台交互验证 | `evidence/studio-v020/browser/report.json`、桌面/手机截图 | 独立滚动、放大预览、项目恢复、无声分镜预演、ZIP下载等通过；Mock浏览器测试与真实模型内容测试分开 |
 | v0.2.0源码与本地封装 | `docs/studio-guide.md`、`scripts/package_release.py`、`scripts/run_packaged.py` | 94项后端测试、3项动画测试与前端构建通过；单端口启动，不等于免安装EXE或已公网部署 |
@@ -18,7 +20,7 @@
 | 旧AI旁白与海报预演 | `artifacts/video/solar-weather-v001/solar-weather-preview-v001.mp4`、`audience-review-v002.md` | 仅过程证据；用户指出术语过深，不作为正式科普成品 |
 | 新卡通动画与反馈 | `artifacts/video/solar-weather-v002-animation/solar-messengers-narrated-v001.mp4`、`user-acceptance-v002.md`、`mp4-narrated-technical-review-v001.json`、`narration-v001/` | 约67秒有声卡通版获用户认可；原84秒无声版保留，22项技术检查通过。多人受众和专家终审待完成；非通用自动动画生成 |
 | 自动优先修正与可选手动微调 | `evidence/storyboard-editor-qa/automatic-first/report.json`、前后对照截图、`docs/storyboard-editor-guide.md` | 一次点击完成本地检查、无损字幕拆分、时长延长、复检和自动保存；记录输入/系统改动区别、原值/新值/原因。无修改也留档，网络重试不重复保存；手动微调折叠。截图来自明确练习输入，不冒充模型错误或视频重生成 |
-| 调用与费用 | `evidence/model-usage.jsonl`、`evidence/budget-authorization.md`、`evidence/billing-snapshot-2026-08-31.json` | 已脱敏；已知模型原价估算累计0.628305元。用户截图可见优惠后金额0.2799122559元，但无账期/付款状态，不等同历史实付；两项不可相加当实付 |
+| 调用与费用 | `evidence/model-usage.jsonl`、`evidence/budget-authorization.md`、`evidence/billing-snapshot-2026-08-31.json` | 本轮结束本地原价估算累计3.235630元（包含历史，不是本轮实付）。用户此前截图可见优惠后金额0.2799122559元，无账期/付款状态，不等同历史实付；两项不能相加。搜索插件等费用须核对账单 |
 | 百炼应用调用证明 | `evidence/console/`与`evidence/knowledge-*.json` | 已有脱敏证据；正式提交截图待挑选 |
 | 应用可复现 | `README.md`、`backend/pyproject.toml`、`frontend/package.json`、`Dockerfile` | 本地可复现，67项后端测试和前端构建通过；云端持久化与访问控制仍需部署前确认 |
 | 公网部署 | `docs/deployment-fc.md`、`evidence/production-unified-server-check-2026-08-29.json` | 生产形态已验证；公网资源尚未创建 |

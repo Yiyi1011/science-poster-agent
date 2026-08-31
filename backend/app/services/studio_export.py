@@ -6,6 +6,7 @@ import zipfile
 
 from app.studio_models import StudioDraft
 from app.services.studio_pipeline import presentation
+from app.services.public_poster import render as public_poster_svg
 
 
 def lines(text, width):
@@ -20,6 +21,8 @@ def svg_text(text, x, y, size=24, width=42, color="#d3e6e8"):
 def poster_svg(project, version=None):
     v = version or project["versions"][-1]
     draft = StudioDraft.model_validate(v["draft"])
+    if draft.public_poster is not None:
+        return public_poster_svg(project, v, draft)
     mock = v["mode"] == "mock"
     status = "MOCK · 流程占位，不可提交" if mock else "AI生成草稿 · 待科学与视觉终审"
     parts = [svg_text("SCIVIS / 科学可视化工作台", 64, 64, 18),

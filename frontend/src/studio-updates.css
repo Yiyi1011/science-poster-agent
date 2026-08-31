@@ -1,0 +1,9 @@
+.studio .studio-auto-source { display:flex; align-items:center; gap:10px; font-size:15px; }
+.studio .studio-auto-source input { width:18px; height:18px; flex:0 0 auto; margin:0; accent-color:#177c79; }
+.studio-source-options > summary { padding:14px 0; cursor:pointer; font-weight:600; }
+.studio-research { margin:12px 0; padding:16px; border:1px solid #b9d2d0; border-radius:12px; background:#edf5f2; }
+.studio-research summary { cursor:pointer; }
+.studio-research article { margin:16px 0; }
+.studio-research p,.studio-research blockquote { font-size:14px; overflow-wrap:anywhere; }
+.studio-research blockquote { margin:8px 0; white-space:pre-wrap; }
+.studio-research small { overflow-wrap:anywhere; }

@@ -61,20 +61,30 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 
 需要真实模型时，在本机从`.env.example`新建`.env`，填写自己的百炼北京配置并重启服务；不提交`.env`，也不将其上传GitHub。项目专用知识库仍是原账号的外部资源，接手者需迁移资料和重新配置，不会随Git自动转移。
 
-离线测试（后端目录）：
+完整测试顺序：**先构建前端，再运行后端测试**。部分后端测试检查同源网页托管，依赖`frontend/dist`；直接在新克隆目录跑pytest会有两个网页测试失败，不代表源码丢失。
+
+第一步，在前端目录运行：
+
+```powershell
+npm ci
+npm run build
+```
+
+第二步，在后端目录运行：
 
 ```powershell
 ..\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
 ```
 
-前端构建与本地动画测试（分别在前端目录、项目根目录）：
+第三步，在项目根目录运行本地动画测试：
 
 ```powershell
-npm run build
 node --test scripts/test_solar_animatic.mjs
 ```
 
 ## 4. 版本和离线备份怎么使用
+
+首次恢复验证使用Python 3.12.13、Node.js 25.2.1、npm 11.6.2；这是本机验证环境记录，不是其他版本兼容性的承诺。Dockerfile的Python 3.12/Node 22部署环境仍需在云端构建时验证。
 
 - Git提交：保存一次经过验证的代码改动及说明。
 - 版本标签：固定一个重要里程碑，如`v0.1.0-baseline`。

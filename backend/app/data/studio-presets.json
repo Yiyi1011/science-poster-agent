@@ -1,0 +1,22 @@
+[
+  {
+    "topic": "AI为什么能说得流畅，却仍可能答错？",
+    "audience": "普通公众",
+    "sources": [{
+      "source_id": "S1",
+      "title": "NIST AI 600-1（2024）2.2节：Confabulation｜中文整理摘要",
+      "url": "https://doi.org/10.6028/NIST.AI.600-1",
+      "text": "来源：NIST《Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile》，2024年，2.2节。以下是依据原文整理的中文摘要，不是逐字翻译。生成式人工智能可能以自信的方式呈现错误或虚假的内容，NIST称之为confabulation。生成模型的输出近似训练数据的统计分布，例如大语言模型预测句子或短语中的下一个词元或词。因而，表达流畅或语气自信本身不能证明输出事实正确。此处是在说明生成机制与错误风险，不是说每条回答都错误，也不代表模型有人的主观意图。尚未提供任何具体系统错误率或降低风险措施的实验数据，不应编造百分比或保证。"
+    }]
+  },
+  {
+    "topic": "复习为什么要隔一段时间，再试着自己回忆？",
+    "audience": "普通公众",
+    "sources": [{
+      "source_id": "S1",
+      "title": "美国教育科学研究所IES学习指南（2007）建议1、5｜中文整理摘要",
+      "url": "https://ies.ed.gov/ncee/wwc/PracticeGuide/1",
+      "text": "来源：美国教育科学研究所IES，Organizing Instruction and Study to Improve Student Learning，2007年9月。以下为中文整理摘要。指南建议把学习分散在时间上，在首次学习后间隔数周至数月复习关键内容；该建议在页面被评为中等证据。指南还建议在学习过程中通过小测验主动提取信息，以促进持久记忆，并把通过小测验再次接触关键内容的建议评为强证据。它不是建议所有任务都使用相同间隔，也没有给出人人通用的最佳复习天数。内容涉及教学和学习策略，不说明具体神经结构如何改变。呈现生活例子时应标为示意，不编造实验分数、提升百分比或保证每个人一定有效。"
+    }]
+  }
+]

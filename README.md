@@ -110,3 +110,8 @@ npm run dev
 低成本部署方案见[`docs/deployment-fc.md`](docs/deployment-fc.md)。
 
 提交证据映射见[`docs/submission-evidence-index.md`](docs/submission-evidence-index.md)，录制顺序见[`docs/demo-video-script-v001.md`](docs/demo-video-script-v001.md)。
+# v0.2.0：跨主题工作台
+
+新增独立项目、资料快照、海报/独立分镜、最多两轮千问自动审核修订、前后对比与草稿包导出。使用说明及实际边界见[跨主题工作台](docs/studio-guide.md)。旧太阳动画和分镜仍保留。
+
+封装版有预构建前端时，可运行`python scripts/run_packaged.py`或Windows双击`启动封装版.cmd`，访问`http://127.0.0.1:8000/`。它只需要一个后端服务，不需Vite；不是免安装EXE。请继续遵守下方的环境配置与密钥保护要求。

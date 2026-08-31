@@ -81,6 +81,8 @@ class Settings:
     runtime_data_dir: str = os.getenv("SCIENCE_POSTER_DATA_DIR", "")
 
     def validate_for_real_ai(self) -> None:
+        from app.services.model_policy import validate_model_policy
+        validate_model_policy(self)
         if self.region != "cn-beijing":
             raise RuntimeError("The competition build expects Bailian AI resources in cn-beijing.")
         if not self.dashscope_api_key:

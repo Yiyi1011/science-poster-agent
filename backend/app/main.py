@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
+import asyncio
+from hashlib import sha256
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -33,9 +36,22 @@ from app.services.visual_workflow import (
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app):
+    from app.services.studio_store import recover_interrupted_runs
+    from app.studio_routes import tasks
+    recover_interrupted_runs()
+    yield
+    for task in list(tasks):
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*list(tasks), return_exceptions=True)
+
 app = FastAPI(
     title="Science Poster Agent API",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
     description="Evidence-driven science poster planning API for the competition MVP.",
 )
 app.add_middleware(
@@ -49,7 +65,8 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health() -> dict[str, str | bool]:
-    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region}
+    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.2.0",
+            "instance": sha256(str(Path(__file__).resolve().parents[2]).lower().encode()).hexdigest()[:16]}
 
 
 @app.get("/api/config/public", response_model=PublicConfig)
@@ -114,6 +131,8 @@ async def plan_video_storyboard(plan: PosterPlan) -> VideoStoryboard:
 
 
 app.include_router(storyboard_editor_router)
+from app.studio_routes import router as studio_router
+app.include_router(studio_router)
 
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if FRONTEND_DIST.exists():

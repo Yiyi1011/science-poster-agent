@@ -4,6 +4,9 @@
 
 | 模板/评审关注点 | 可提交证据 | 当前状态 |
 |---|---|---|
+| 跨主题独立项目与Qwen语义修订 | `evidence/studio-v020/report.json`、`refined-*.json`、项目完整JSON/草稿ZIP、`docs/studio-guide.md` | 两个真实qwen-plus项目；生成、审核改写与复检10次文本调用，首轮各4处修改，开发者提出边界问题后分别再改7处/11处。留存原稿，不冒充专家或公众评测；通用视频仍为分镜 |
+| 新工作台交互验证 | `evidence/studio-v020/browser/report.json`、桌面/手机截图 | 独立滚动、放大预览、项目恢复、无声分镜预演、ZIP下载等通过；Mock浏览器测试与真实模型内容测试分开 |
+| v0.2.0源码与本地封装 | `docs/studio-guide.md`、`scripts/package_release.py`、`scripts/run_packaged.py` | 94项后端测试、3项动画测试与前端构建通过；单端口启动，不等于免安装EXE或已公网部署 |
 | 主案例成品 | `artifacts/solar-weather-poster-v2.svg`、`artifacts/solar-weather-poster-v2.png` | 已完成，SVG可编辑 |
 | 主案例科学审核 | `artifacts/solar-weather-science-review-v1.md`、知识库7份上传文档 | 已完成；最终仍建议领域人员签字/署名 |
 | 跨主题复用A：AI可信错觉 | `artifacts/cross-topic/ai-confabulation/poster-v004-final.*`、`science-review-v001.md`、`final-manifest-v001.json` | 已完成 |

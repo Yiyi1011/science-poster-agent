@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +30,33 @@ evidence必须输出[]，不得输出空字符串、null或对象。"""
 class QwenClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+
+    async def studio_json(self, prompt: str, data: dict, purpose: str) -> tuple[dict, dict]:
+        from app.services.model_policy import guard_text_budget
+        self.settings.validate_for_real_ai()
+        guard_text_budget(self.settings)
+        async with httpx.AsyncClient(timeout=120, follow_redirects=False) as client:
+            response = await client.post(
+                f"{self.settings.dashscope_base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.settings.dashscope_api_key}"},
+                json={"model": self.settings.qwen_text_model,
+                      "messages": [{"role": "system", "content": prompt},
+                                   {"role": "user", "content": json.dumps(data, ensure_ascii=False)}],
+                      "response_format": {"type": "json_object"}, "temperature": 0.2,
+                      "enable_thinking": False, "max_tokens": 5000},
+            )
+            response.raise_for_status()
+        body = response.json()
+        record_text_usage(self.settings, body, purpose=purpose)
+        choice = body["choices"][0]
+        if choice.get("finish_reason") == "length":
+            raise ValueError("模型输出被截断，未保存不完整作品")
+        return json.loads(choice["message"]["content"]), {
+            "provider": "阿里云百炼", "model": self.settings.qwen_text_model,
+            "response_model": body.get("model", ""), "region": self.settings.region,
+            "request_id": body.get("id", ""), "purpose": purpose,
+            "prompt_version": "studio-v1.1", "prompt_sha256": sha256(prompt.encode()).hexdigest(), "usage": body.get("usage", {}),
+        }
 
     async def create_poster_plan(self, request: PosterRequest) -> dict:
         self.settings.validate_for_real_ai()

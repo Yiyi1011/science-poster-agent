@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "science-poster-agent-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Backend for a cross-domain science poster agent"
 requires-python = ">=3.11"
 dependencies = [

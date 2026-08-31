@@ -7,3 +7,11 @@
 .studio-research p,.studio-research blockquote { font-size:14px; overflow-wrap:anywhere; }
 .studio-research blockquote { margin:8px 0; white-space:pre-wrap; }
 .studio-research small { overflow-wrap:anywhere; }
+.studio-media{padding:20px;margin:12px 0 24px;background:#214e58;color:#f0f8f7;border:1px solid #56848b;border-radius:18px}
+.studio-media h3,.studio-media p,.studio-media strong{color:inherit}
+.studio-media small{color:#c0dcdf}
+.studio-script-details>summary{padding:16px 0;cursor:pointer;font-weight:600}
+.studio-media video{width:100%;max-height:480px;background:#08252f;margin-top:16px}
+.studio-media small{display:block;margin-top:12px;line-height:1.7}
+.studio-media a{color:#9be5d7}
+.studio-media button{white-space:normal;text-align:left}

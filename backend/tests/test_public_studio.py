@@ -20,6 +20,9 @@ from app.services.studio_export import poster_svg
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("SCIENCE_POSTER_DATA_DIR", str(tmp_path))
+    async def orientation(*args):
+        return research.Primer(domain="science", answer="这是一段仅供测试的模型初步解释，不可用作原始文献资料或者已经核实的来源。", queries=["query1", "query2"]), {}
+    monkeypatch.setattr(research, "orient", orientation)
 
 
 def data():
@@ -130,7 +133,7 @@ def test_research_uses_only_fetched_exact_quotes_not_model_summary():
     class Client:
         async def studio_json(self, *args):
             return {"sources": [{"page_id": "P1", "quotes": [body], "reason": "原文说明了该现象"}], "gap": ""}, {}
-    async def search(*args): return [{"url": "https://science.nasa.gov/test", "title": "Original source"}], {}
+    async def search(*args, **kwargs): return [{"url": "https://science.nasa.gov/test", "title": "Original source"}], {}
     async def fetch(*args): return "https://science.nasa.gov/test", body
     with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
         result = asyncio.run(research.research(Client(), "test topic", lambda label: None))
@@ -142,7 +145,7 @@ def test_hallucinated_excerpt_not_accepted():
     class Client:
         async def studio_json(self, *args):
             return {"sources": [{"page_id": "P1", "quotes": ["This fabricated sentence must not become scientific evidence."], "reason": "与问题有关的解释"}], "gap": ""}, {}
-    async def search(*args): return [{"url": "https://science.nasa.gov/test", "title": "Original source"}], {}
+    async def search(*args, **kwargs): return [{"url": "https://science.nasa.gov/test", "title": "Original source"}], {}
     async def fetch(*args): return "https://science.nasa.gov/test", "This is the actual page, and it says something different from the invented quotation."
     with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
         result = asyncio.run(research.research(Client(), "test topic", lambda label: None))

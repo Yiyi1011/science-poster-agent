@@ -42,9 +42,14 @@ PUBLIC_PROMPT = """
    旁白每镜约30—65字，最多90字。用提问→具体情境→机制分步→容易误会之处→边界→记住一句话的叙事，不能把一句话重复六遍凑数。
    每镜visual_action写清角色、起始画面、动作和变化，画面服务本镜解释，不要所有镜头都换同一个背景。
 7. 资料太少支撑不了叙事时标出缺口，不添加新事实凑镜头。审核须检查所有公众文案、视觉动作及claim_ids的实质支持关系。
+8. 不让科普只剩几句口号：explainer写3—5节，每节80—150字（最多220），分别讲是什么、怎样运作、日常例子及类比局限、适用边界；用因为什么→所以怎样串起来，不写论文摘要。
+   用词先白话再必要术语，不重复海报原句凑字数。learning_check提出一个可以用刚才解释回答的小问题，并给出解释性答案。所有字段仍须有claim_ids支持，不凭常识增加无来源的事实。
+9. 不把抽象定义推成系统必有的能力：有接口/协议不等于自动安全、必有权限验证、必经过网关转发，也不代表所有软件采用同一实现。
+   具体产品行为、参数、权限、数字若无来源不能作为事实；只作假设示例时在旁白/画面明确标示“假设情境”。类比只能帮助理解约定，不能推出类比对象的全部性质。
+10. 审核区分“肯定有某能力”与“不能据此保证某能力”，不能把否定保证当成承诺。支持通俗转述和明确标注的概念类比，不要求每个生活化词语逐字出现在来源；只在增加实质性事实或误导推断时阻止。
 """
 BASE_PROMPT += PUBLIC_PROMPT
-GEN_PROMPT = BASE_PROMPT + "生成一张海报和6—8个独立通俗分镜。最多3条核心事实。紧扣topic，资料不支持时不偷换主题。"
+GEN_PROMPT = BASE_PROMPT + "生成一张海报和6—8个独立通俗分镜。最多4条核心事实，尽量覆盖定义、机制、例子及边界。紧扣topic，资料不支持时不偷换主题。"
 REVIEW_PROMPT = BASE_PROMPT + """你现在是审核编辑。旧稿可能不合格，不必保留它的错误例子或措辞；逐项修复previous_findings和communication_findings。
 来源未提供的真实地名、人名、年代、数字例子必须移除，换成明确标注的抽象情境。不能用新增常识来证明旧稿错误例子。
 不要把‘预测下一个词’扩大成‘不查事实/不理解/不思考/只选最常见的词’等绝对论断。
@@ -97,6 +102,9 @@ def validate_evidence(draft: StudioDraft, project: ProjectInput) -> list[dict]:
         for index, item in enumerate([*public.cards, public.example, public.caution, *public.nodes]):
             if any(cid not in ids for cid in item.claim_ids):
                 problems.append({"target": f"public_poster[{index + 1}]", "severity": "blocker", "message": "公众文案或图解引用了不存在的事实编号"})
+    for item in [*draft.explainer, *([draft.learning_check] if draft.learning_check else [])]:
+        if any(cid not in ids for cid in item.claim_ids):
+            problems.append({"target": "explainer", "severity": "blocker", "message": "详细讲解或理解题引用了不存在的事实编号"})
     return problems
 
 
@@ -127,9 +135,17 @@ def validate_communication(draft: StudioDraft, project: ProjectInput | None = No
         warn("scenes", "有完全重复的旁白，不能靠复制凑分镜。")
     if any(len(s.narration) > 90 for s in draft.scenes):
         warn("scenes.narration", "单镜旁白过长，请拆分或简化，控制在90字以内。")
+    if draft.explainer:
+        if len(draft.explainer) < 3 or len({normalized(s.body) for s in draft.explainer}) != len(draft.explainer):
+            warn("explainer", "讲解至少应有三个不同环节，不要重复几句话凑篇幅。")
+        if not draft.learning_check:
+            warn("learning_check", "缺少帮助读者确认理解的小问题与解释。")
     if project:
         source_text = "\n".join(s.text for s in project.sources)
         published = {"title": draft.title, "takeaway": draft.takeaway, "diagram.caption": draft.diagram.caption}
+        published.update({f"explainer[{i + 1}]": p.heading + p.body for i, p in enumerate(draft.explainer)})
+        if draft.learning_check:
+            published["learning_check"] = draft.learning_check.question + draft.learning_check.answer
         for scene in draft.scenes:
             published[scene.scene_id + ".narration"] = scene.narration
             published[scene.scene_id + ".visual_action"] = scene.visual_action
@@ -144,6 +160,10 @@ def validate_communication(draft: StudioDraft, project: ProjectInput | None = No
             years = re.findall(r"\d{4}(?=年)", content)
             if any(year not in source_text for year in years):
                 messages.append("含资料没有的具体年份；请删除日期细节，不用虚构年代解释科学原理")
+            guarantees = list(re.finditer(r"(?:确保|保证|保障).{0,10}安全|安全(?:协作|合作|交换)|不能越权|验证并转发", content))
+            affirmative = [m for m in guarantees if not re.search(r"不(?:能|会|代表|等于|意味着)|并非|并不", content[max(0, m.start() - 14):m.start()])]
+            if affirmative and not re.search(r"security|authorization|permission|安全|权限", source_text, re.I):
+                messages.append("来源未支持安全/权限保证或特定验证实现；不能从接口、约定等一般定义推出这些能力")
             if re.search(r"比[^，。；：]{1,16}(更|更能|更好|更强)", content) and not re.search(r"相比|优于|好于|better than|比.{1,12}更", source_text):
                 messages.append("含未提供直接比较依据的优劣表述；请仅描述来源支持的作用")
             for match in re.finditer(r"(?:没有|不具备|不懂|不能|不会|不是靠).{0,4}(?:意识|主观意图|思考|推理|理解|查证事实|事实)", content):
@@ -225,10 +245,29 @@ async def execute(project_id, request):
             repair_available = True
             calls = []
             mechanical_changes = []
+            def normalize_icons(raw):
+                candidate = raw.get("revised") if "revised" in raw else raw
+                if not isinstance(candidate, dict):
+                    return
+                poster = candidate.get("public_poster")
+                if not isinstance(poster, dict):
+                    return
+                for i, node in enumerate(poster.get("nodes", [])):
+                    if isinstance(node, dict) and isinstance(node.get("icon"), str) and node["icon"] not in {"chat", "book", "search", "check", "clock", "spark", "question"}:
+                        mechanical_changes.append({"field": f"public_poster.nodes[{i}].icon", "before": node["icon"], "after": "question",
+                                                   "reason": "未知装饰图标替换为通用问号；不改变科学文字或关系"})
+                        node["icon"] = "question"
             async def checked(prompt, payload, purpose, contract):
                 nonlocal repair_available
+                # Storage accepts old 3-scene records; newly generated/revised output must contain 6–8 scenes.
+                schema = payload.get("schema", {})
+                for definition in [schema, *schema.get("$defs", {}).values()]:
+                    scenes = definition.get("properties", {}).get("scenes")
+                    if scenes:
+                        scenes["minItems"] = 6
                 raw, receipt = await client.studio_json(prompt, payload, purpose)
                 calls.append(receipt)
+                normalize_icons(raw)
                 try:
                     result = contract.model_validate(raw)
                 except ValidationError as error:
@@ -240,6 +279,7 @@ async def execute(project_id, request):
                     raw, receipt = await client.studio_json(BASE_PROMPT + "仅修复指出的JSON结构或长度问题，保持证据含义。禁止添加未定义字段。返回完整修复对象。",
                         {"project": data.model_dump(), "candidate": raw, "errors": errors, "schema": contract.model_json_schema()}, purpose + "_schema_repair")
                     calls.append(receipt)
+                    normalize_icons(raw)
                     result = contract.model_validate(raw)
                 changed_draft = result if isinstance(result, StudioDraft) else result.revised
                 if changed_draft is not None and purpose != "studio_recheck":

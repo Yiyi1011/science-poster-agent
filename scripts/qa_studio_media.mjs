@@ -1,0 +1,53 @@
+// Read-only QA. Never clicks generation or revision buttons.
+import {pathToFileURL} from 'node:url';
+import {resolve} from 'node:path';
+import {mkdir, writeFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const {chromium} = await import(pathToFileURL(resolve(process.argv[2])).href);
+const id = process.argv[3];
+const out = resolve('evidence/studio-v040/browser-media');
+await mkdir(out,{recursive:true});
+const browser = await chromium.launch({channel:'msedge',headless:true});
+const errors=[];
+try {
+  const page=await browser.newPage({viewport:{width:1440,height:1050}});
+  page.on('pageerror', e=>errors.push(e.message));
+  await page.goto('http://127.0.0.1:8000/');
+  await page.getByLabel('打开已保存项目').selectOption(id);
+  await page.getByRole('tab',{name:'科普视频',exact:true}).waitFor();
+  assert.equal(await page.getByRole('tab',{name:'科普视频',exact:true}).getAttribute('aria-selected'),'true');
+  await page.getByRole('tab',{name:'一步步讲清楚'}).click();
+  assert(await page.locator('.studio-scroll .studio-scene').count()>=4);
+  await page.getByText('看看解释',{exact:true}).click();
+  await page.screenshot({path:out+'/explanation.png',fullPage:true});
+  await page.getByRole('tab',{name:'科普视频',exact:true}).click();
+  const video=page.locator('.studio-media video');
+  await video.waitFor();
+  await video.evaluate(v=>new Promise((resolve,reject)=>{
+    if(v.readyState>=1) return resolve();
+    v.onloadedmetadata=resolve; v.onerror=()=>reject(new Error('video failed'));
+  }));
+  const metadata=await video.evaluate(v=>({duration:v.duration,width:v.videoWidth,height:v.videoHeight}));
+  assert(metadata.duration>=60 && metadata.duration<=90 && metadata.width===1280 && metadata.height===720);
+  await video.evaluate(async v=>{v.muted=true; await v.play();});
+  await page.waitForTimeout(1000);
+  assert(await video.evaluate(v=>v.currentTime)>0);
+  await video.evaluate(v=>v.pause());
+  await page.getByText('查看画面检查与自动修改痕迹',{exact:true}).click();
+  assert(await page.locator('.studio-media a', {hasText:'查看候选'}).count()>=6);
+  await page.screenshot({path:out+'/video-and-audit.png',fullPage:true});
+  const download=await page.request.get(new URL(await page.getByRole('link',{name:'下载MP4',exact:true}).getAttribute('href'),page.url()).href,{headers:{Range:'bytes=0-1023'}});
+  assert([200,206].includes(download.status()));
+  await page.getByRole('tab',{name:'配套海报（选做）',exact:true}).click();
+  await page.getByRole('button',{name:'放大海报'}).waitFor();
+  const poster=await page.request.get(new URL(await page.locator('.studio-poster img').getAttribute('src'),page.url()).href);
+  assert.equal(poster.status(),200);
+  assert(poster.headers()['content-type'].startsWith('image/svg+xml'));
+  await page.getByRole('tab',{name:'科普视频',exact:true}).click();
+  await page.setViewportSize({width:390,height:844});
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:out+'/mobile.png',fullPage:true});
+  assert.deepEqual(errors,[]);
+  await writeFile(out+'/report.json',JSON.stringify({project:id,metadata,errors,paid_actions:0},null,2));
+  console.log(JSON.stringify({project:id,metadata,errors,paid_actions:0}));
+} finally {await browser.close();}

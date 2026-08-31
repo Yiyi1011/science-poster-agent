@@ -30,25 +30,30 @@ async def main(args):
         ids.append(store.create_project(ProjectInput(topic=args.question, auto_sources=True))["id"])
     if not ids:
         raise SystemExit("Provide an existing project or a question")
-    directory = ROOT / "evidence/studio-v030"
+    directory = ROOT / args.output_directory
     directory.mkdir(parents=True, exist_ok=True)
     report = []
     for project_id in ids:
         project = store.get_project(project_id)
         previous = project["versions"][-1]["version"] if project["versions"] else 0
-        feedback = ("用户反馈：海报语言太像论文，图解解释不足；要从通用生成流程改善公众表达，而非只改一个案例。"
-                    "旁白要更丰富，不止三个分镜。请依照公众表达规范补全public_poster及6—8镜，保留科学条件。"
-                    "开发者补充：原稿关于AI不理解、不思考，以及人的思维机制的断言无资料支持，须一并纠正。") if previous else ""
+        feedback = ""  # Never inject a previous case's developer feedback into a different topic.
         if args.feedback_file:
             feedback = Path(args.feedback_file).read_text(encoding="utf-8").strip()
-        request = RunInput(request_id=uuid4(), expected_version=previous, feedback=feedback, rebuild=args.rebuild)
+        request = RunInput(request_id=uuid4(), expected_version=previous, feedback=feedback, rebuild=args.rebuild, make_video=args.video)
         store.reserve(project_id, request)
         print(json.dumps({"phase": "start", "project": project_id, "previous_version": previous}), flush=True)
-        await execute(project_id, request)
+        if args.video:
+            from app.studio_routes import execute_with_video
+            await execute_with_video(project_id, request)
+        else:
+            await execute(project_id, request)
         result = store.get_project(project_id)
         (directory / f"{project_id}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         entry = {"project": project_id, "state": result["runs"][-1]["state"], "error": result["runs"][-1]["error"],
                  "sources": len((result.get("research") or {}).get("sources", [])) or len(result["input"]["sources"])}
+        if result.get("media"):
+            media = result["media"][-1]
+            entry["media"] = {k: media.get(k) for k in ("id", "state", "renderer", "stage", "duration_seconds")}
         if result["versions"]:
             version = result["versions"][-1]
             draft = StudioDraft.model_validate(version["draft"])
@@ -64,6 +69,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", action="append")
     parser.add_argument("--question")
+    parser.add_argument("--output-directory", default="evidence/studio-v040")
     parser.add_argument("--rebuild", action="store_true", help="Rewrite from source input, preserving old versions")
+    parser.add_argument("--video", action="store_true", help="Explicitly run the paid automatic cartoon pipeline after text review")
     parser.add_argument("--feedback-file", help="Explicit developer/user feedback text; provenance must be stated in the file")
     asyncio.run(main(parser.parse_args()))

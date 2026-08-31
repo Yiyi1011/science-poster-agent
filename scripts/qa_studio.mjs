@@ -10,17 +10,22 @@ const browser = await chromium.launch({channel:'msedge', headless:true});
 const errors = [], checks = {};
 try {
   const page = await browser.newPage({viewport:{width:1440,height:1050}, acceptDownloads:true});
+  const health=await (await page.request.get('http://127.0.0.1:8123/api/health')).json();
+  assert.equal(health.mock_ai,true,'Never run the Mock interaction test against a paid server');
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/**', async route => {
     const u = new URL(route.request().url());
     const response = await route.fetch({url:'http://127.0.0.1:8123'+u.pathname+u.search});
     await route.fulfill({response});
   });
-  await page.goto('http://127.0.0.1:5173/');
+  await page.goto('http://127.0.0.1:8000/');
   await page.getByRole('button',{name:'AI为何会答错 ↗'}).click();
-  await page.getByRole('button',{name:'生成作品并自动审核 →'}).click();
-  await page.getByRole('button',{name:'放大海报'}).waitFor();
+  await page.getByRole('button',{name:'生成科普视频 →'}).click();
   await page.waitForFunction(() => document.querySelector('[role=status]')?.textContent.includes('Mock演示完成'));
+  assert.equal(await page.getByRole('tab',{name:'科普视频',exact:true}).getAttribute('aria-selected'),'true');
+  assert.equal(await page.locator('.studio-media video').count(),0,'Mock must not pretend it generated paid media');
+  await page.getByRole('tab',{name:'配套海报（选做）',exact:true}).click();
+  await page.getByRole('button',{name:'放大海报'}).waitFor();
   const id = await page.getByLabel('打开已保存项目').inputValue();
   assert(id);
   checks.mock_project_saved_and_polled = true;
@@ -34,7 +39,8 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(),0);
   checks.lightbox_escape = true;
-  await page.getByRole('tab',{name:'独立分镜'}).click();
+  await page.getByRole('tab',{name:'科普视频',exact:true}).click();
+  await page.locator('.studio-script-details > summary').click();
   await page.getByRole('button',{name:'预演分镜',exact:true}).click();
   assert.equal(await page.locator('.studio-animatic.playing').count(),1);
   await page.getByRole('button',{name:'暂停',exact:true}).click();
@@ -47,7 +53,7 @@ try {
   checks.export_zip = true;
   await page.reload();
   await page.getByLabel('打开已保存项目').selectOption(id);
-  await page.getByRole('button',{name:'放大海报'}).waitFor();
+  await page.getByRole('tab',{name:'科普视频',exact:true}).waitFor();
   checks.reload_restores_project = true;
   await page.getByRole('tab',{name:'证据与版本'}).click();
   await page.locator('.studio-evidence').first().waitFor();

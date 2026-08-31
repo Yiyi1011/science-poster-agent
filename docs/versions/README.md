@@ -10,7 +10,8 @@
 | [v0.1.1-handoff](https://github.com/Yiyi1011/science-poster-agent/tree/v0.1.1-handoff) | 添加私有仓库备份和接手教程 | 查如何克隆、配置密钥和交接 |
 | [v0.1.2-handoff-check](https://github.com/Yiyi1011/science-poster-agent/tree/v0.1.2-handoff-check) | 根据新目录恢复测试修正安装顺序 | 查前端构建与后端测试的先后关系 |
 | [v0.2.0-studio](https://github.com/Yiyi1011/science-poster-agent/tree/v0.2.0-studio) | 跨主题项目、证据隔离、Qwen自动修订、单端口启动 | 查看原先的3—5镜和事实卡式海报实现 |
-| [process/v0.3.0-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.3.0-preview) | 公众文案与证据分层、6—8镜、问题自动检索入口 | 当前制作版本；[变更和局限](process/v0.3.0-preview.md) |
+| [process/v0.3.0-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.3.0-preview) | 公众文案与证据分层、6—8镜、问题自动检索入口 | 查纯脚本阶段；[变更和局限](process/v0.3.0-preview.md) |
+| [process/v0.4.0-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.0-preview) | 基础问题检索、详细讲解；默认卡通MP4、AI旁白字幕，海报选做 | 最新制作版本；[变更和局限](process/v0.4.0-preview.md) |
 
 旧标签原样保留，不移动、不重写历史。以后制作里程碑统一用 `process/v版本号-preview`；每次标签对应一个明确的Git提交，而不是把所有历史文件复制到当前目录。
 

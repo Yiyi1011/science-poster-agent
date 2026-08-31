@@ -1,18 +1,36 @@
 import asyncio
 import json
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid5, NAMESPACE_URL
 
 from fastapi import APIRouter, HTTPException, Response, Query
 
 from app.config import settings
-from app.studio_models import ProjectInput, RunInput
+from app.studio_models import ProjectInput, RunInput, MediaInput
+from fastapi.responses import FileResponse
 from app.services import studio_store as store
 from app.services.studio_pipeline import execute
 from app.services.studio_export import export_zip, poster_svg
 
 router = APIRouter(prefix="/api/studio", tags=["Cross-topic studio"])
 tasks: set[asyncio.Task] = set()
+
+
+async def execute_with_video(project_id, request):
+    await execute(project_id, request)
+    project = store.get_project(project_id)
+    run = next(r for r in project["runs"] if r["id"] == str(request.request_id))
+    if not request.make_video or settings.mock_ai or run["state"] != "succeeded":
+        return
+    from app.services.studio_media import execute_media
+    media_request = MediaInput(request_id=uuid5(NAMESPACE_URL, str(request.request_id) + "/cartoon"),
+                               expected_version=project["versions"][-1]["version"], renderer="cartoon")
+    try:
+        fresh = store.reserve_media(project_id, media_request)
+    except ValueError:
+        return  # A competing operation already owns the version; never duplicate paid work.
+    if fresh:
+        await execute_media(project_id, media_request)
 
 
 @router.get("/presets")
@@ -51,7 +69,7 @@ async def run(project_id: UUID, request: RunInput):
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from None
     if fresh:
-        task = asyncio.create_task(execute(str(project_id), request))
+        task = asyncio.create_task(execute_with_video(str(project_id), request))
         tasks.add(task)
         task.add_done_callback(tasks.discard)
     return lookup(project_id)
@@ -78,3 +96,30 @@ def download(project_id: UUID):
     return Response(export_zip(project), media_type="application/zip", headers={
         "Content-Disposition": f'attachment; filename="scivis-{project_id}-v{project["versions"][-1]["version"]}.zip"',
         "Cache-Control": "no-store"})
+
+
+@router.post("/projects/{project_id}/media", status_code=202)
+async def media(project_id: UUID, request: MediaInput):
+    from app.services.studio_media import execute_media
+    lookup(project_id)
+    try:
+        fresh = store.reserve_media(str(project_id), request)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    if fresh:
+        task = asyncio.create_task(execute_media(str(project_id), request))
+        tasks.add(task); task.add_done_callback(tasks.discard)
+    return lookup(project_id)
+
+
+@router.get("/projects/{project_id}/media/{job_id}/{filename}")
+def media_file(project_id: UUID, job_id: UUID, filename: str):
+    from app.services.studio_media import directory
+    project = lookup(project_id)
+    job = next((m for m in project["media"] if m["id"] == str(job_id)), None)
+    if not job or filename not in job["files"] or Path(filename).name != filename or "\\" in filename:
+        raise HTTPException(404, "媒体文件不存在")
+    path = directory(str(project_id), str(job_id)) / filename
+    if not path.is_file():
+        raise HTTPException(404, "媒体文件尚未生成")
+    return FileResponse(path, headers={"Cache-Control": "no-store"})

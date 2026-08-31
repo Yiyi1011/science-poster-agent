@@ -99,6 +99,9 @@ class QwenImageClient:
             response.raise_for_status()
             body = response.json()
             image_url, request_id, output_count, width, height = parse_image_response(body)
+            # Generation is already billable even if the subsequent download fails.
+            estimated_cost = record_image_usage(self.settings, request_id=request_id, output_count=output_count,
+                output_width=width, output_height=height)
             image_url = secure_aliyun_result_url(image_url)
             image_response = await client.get(image_url)
             image_response.raise_for_status()
@@ -113,13 +116,6 @@ class QwenImageClient:
                 "model": self.settings.qwen_image_model,
                 "file_path": str(path.relative_to(Path(__file__).resolve().parents[3])).replace("\\", "/"),
             }
-        )
-        estimated_cost = record_image_usage(
-            self.settings,
-            request_id=request_id,
-            output_count=output_count,
-            output_width=width,
-            output_height=height,
         )
         result = ImageGenerationResult(
             asset=updated,

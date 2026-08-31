@@ -94,6 +94,18 @@ class PublicPoster(StrictModel):
     nodes: list[VisualNode] = Field(min_length=2, max_length=4)
 
 
+class ExplanationStep(StrictModel):
+    heading: str = Field(min_length=2, max_length=20)
+    body: str = Field(min_length=50, max_length=220)
+    claim_ids: list[str] = Field(min_length=1, max_length=4)
+
+
+class LearningCheck(StrictModel):
+    question: str = Field(min_length=8, max_length=100)
+    answer: str = Field(min_length=15, max_length=180)
+    claim_ids: list[str] = Field(min_length=1, max_length=4)
+
+
 class StudioDraft(StrictModel):
     title: str = Field(min_length=2, max_length=24)
     takeaway: str = Field(min_length=8, max_length=80)
@@ -102,6 +114,8 @@ class StudioDraft(StrictModel):
     # Old three-scene projects remain readable; new generation has a separate quality gate.
     scenes: list[Scene] = Field(min_length=3, max_length=8)
     public_poster: PublicPoster | None = None
+    explainer: list[ExplanationStep] = Field(default_factory=list, max_length=5)
+    learning_check: LearningCheck | None = None
 
 
 class Finding(StrictModel):
@@ -120,3 +134,10 @@ class RunInput(StrictModel):
     expected_version: int = Field(ge=0)
     feedback: str = Field(default="", max_length=1000)
     rebuild: bool = False
+    make_video: bool = False
+
+
+class MediaInput(StrictModel):
+    request_id: UUID
+    expected_version: int = Field(ge=1)
+    renderer: Literal["cartoon", "illustrated"] = "cartoon"

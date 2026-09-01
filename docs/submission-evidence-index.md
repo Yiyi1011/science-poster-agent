@@ -4,6 +4,8 @@
 
 | 模板/评审关注点 | 可提交证据 | 当前状态 |
 |---|---|---|
+| v0.5通用闭环四题端到端 | `docs/versions/process/v0.5.0-preview.md`、`制作日志.md`、`scripts/run_studio_acceptance.py`、`artifacts/studio-media/`四项目MP4 | 月亮8镜90.64秒、间隔学习7镜68秒（第5镜视觉拒绝→双向箭头渲染修复→重试成功）、AI题68秒复核、API题8镜68秒一次通过；各自`verify_media_output`复验OK；内容仍须人工试听与科学终审 |
+| v0.5 JSON加固与确定性降级 | `backend/app/services/studio_structured_output.py`、`studio_fallback.py`、`tests/test_studio_v05.py` | 拒绝多义JSON、仅安全修复格式、fallback明确标记不冒充模型规划；媒体完整性含垃圾文件回退 |
 | v0.4.4私有备份可恢复性 | `docs/versions/process/v0.4.4-preview.md`、`scripts/backup_private_runtime.py`、本机通过版manifest | 首次Windows临时文件占用失败已显式标记；修复要求连接关闭、SQLite完整性、无`.env`、SHA256和解压复核均通过才可交接 |
 | v0.4.3完整句字幕与交接回退 | `docs/versions/process/v0.4.3-preview.md`、`docs/CLAUDE_DEEPSEEK_HANDOFF.md`、本机私有备份manifest | 完整句保持同一cue，长句画面内换行；4/8/40秒抽帧通过。代码包、Git历史与不含`.env`的私有运行数据分开备份；Claude/DeepSeek不得替换生产Qwen |
 | v0.4.2字幕纠错与自动制作可视化 | `docs/versions/process/v0.4.2-preview.md`、`evidence/studio-v042/browser-media/`、本机媒体修正记录 | 用户发现首句字幕重复后定位为Qwen WAV异常数据长度头；零模型调用重合成，旧片保留。第3/15/28秒抽帧字幕不同；右侧真实阶段、自动切换播放器及证据页修订入口已验证 |

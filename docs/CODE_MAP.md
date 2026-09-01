@@ -7,10 +7,14 @@
 | 文件 | 简要说明 |
 |---|---|
 | [backend/app/services/studio_media.py](../backend/app/services/studio_media.py) | 按脚本版本生成插画、视觉检查与重画、配音和媒体任务留痕 |
-| [backend/app/services/studio_video.py](../backend/app/services/studio_video.py) | 按实际PCM字节计算配音时序、校验字幕区间，并合成卡通/插画MP4；卡通默认不做PNG |
-| [backend/app/services/studio_cartoon.py](../backend/app/services/studio_cartoon.py) | 千问规划对象/动作、非法装饰图标兼容与结构修复留痕、通用卡通绘制、视觉检查及同版旁白复用 |
+| [backend/app/services/studio_video.py](../backend/app/services/studio_video.py) | 按实际PCM字节计算配音时序、校验字幕区间，并合成卡通/插画MP4；`verify_media_output`做时长/音轨/三点抽帧完整性复验 |
+| [backend/app/services/studio_cartoon.py](../backend/app/services/studio_cartoon.py) | 千问规划对象/动作、非法装饰图标兼容与结构修复留痕、通用卡通绘制（exchange改为同线双向箭头）、视觉检查及同版旁白复用 |
+| [backend/app/services/studio_structured_output.py](../backend/app/services/studio_structured_output.py) | v0.5 JSON安全解析：字符串感知括号扫描、拒绝多义对象、仅修trailing comma、容器内别名修复，返回解析说明 |
+| [backend/app/services/studio_fallback.py](../backend/app/services/studio_fallback.py) | v0.5 确定性降级：千问规划失败时按已审核来源组织6镜模板初稿，明确`fallback`待人工核实；卡通规划同样可确定性降级 |
+| [backend/tests/test_studio_v05.py](../backend/tests/test_studio_v05.py) | v0.5 测试：JSON加固、fallback草稿充分性、管线fallback集成、确定性卡通规划、领域后备页、检索次数有界、媒体完整性±垃圾文件 |
 | [backend/tests/test_studio_extended.py](../backend/tests/test_studio_extended.py) | 基础问题检索、完整讲解、媒体幂等/路径/拒绝候选和本地视频回归 |
 | [scripts/verify_studio_media.py](../scripts/verify_studio_media.py) | 显式收费的单项目媒体实测脚本；不要当免费单元测试运行 |
+| [scripts/run_studio_acceptance.py](../scripts/run_studio_acceptance.py) | v0.5 HTTP验收驱动：创建项目→带make_video跑通→HTTP轮询→终态汇总；不直读数据库，run失败时以退出码2提示 |
 | [scripts/qa_studio_media.mjs](../scripts/qa_studio_media.mjs) | 只读浏览器验证自动选中修正版视频、实际播放、MP4下载、证据页和选做海报 |
 | [scripts/record_media_review.py](../scripts/record_media_review.py) | 追加明确人工复核意见，不覆盖模型检查或原视频 |
 | [scripts/recompose_cartoon.py](../scripts/recompose_cartoon.py) | 复用原方案和配音修正程序动效，不调用AI；旧MP4保留且记录程序修正 |
@@ -23,8 +27,8 @@
 | [backend/app/studio_routes.py](../backend/app/studio_routes.py) | 项目、生成任务、版本海报和ZIP导出接口 |
 | [backend/app/studio_models.py](../backend/app/studio_models.py) | 来源、事实、公众文案、图解和分镜的数据结构与长度限制 |
 | [backend/app/services/studio_pipeline.py](../backend/app/services/studio_pipeline.py) | 通用提示词、生成/审核/自动修订/复检、语文与证据结构检查 |
-| [backend/app/services/studio_research.py](../backend/app/services/studio_research.py) | 百炼搜索、搜索异常时官方概念页后备、原文段落ID选择、合规长度裁剪和来源快照 |
-| [backend/app/services/studio_store.py](../backend/app/services/studio_store.py) | SQLite项目、只追加的版本、检索快照、任务去重与恢复 |
+| [backend/app/services/studio_research.py](../backend/app/services/studio_research.py) | 百炼搜索、搜索异常时官方概念页后备、领域后备页（NASA/IES/WHO）、来源部分支持规则、原文段落ID选择、合规长度裁剪和来源快照 |
+| [backend/app/services/studio_store.py](../backend/app/services/studio_store.py) | SQLite项目（WAL+timeout=30抗WPS同步锁）、只追加的版本、检索快照、任务去重与恢复 |
 | [backend/app/services/public_poster.py](../backend/app/services/public_poster.py) | 新版白话海报SVG排版、图标和按词换行 |
 | [backend/app/services/studio_export.py](../backend/app/services/studio_export.py) | 兼容旧版海报，导出SVG、独立分镜、估算字幕和版本记录 |
 | [backend/app/services/qwen_client.py](../backend/app/services/qwen_client.py) | 百炼千问文本调用、结构化输出、脱敏回执 |

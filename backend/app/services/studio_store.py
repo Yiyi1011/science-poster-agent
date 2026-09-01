@@ -18,7 +18,10 @@ def now():
 def connection():
     root = Path(os.getenv("SCIENCE_POSTER_DATA_DIR") or Path(__file__).resolve().parents[3] / "artifacts")
     root.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(root / "studio.sqlite3", timeout=10)
+    # WPS cloud sync can hold transient file locks on this folder; WAL plus a
+    # longer busy timeout keeps brief sync bursts from aborting media jobs.
+    db = sqlite3.connect(root / "studio.sqlite3", timeout=30)
+    db.execute("PRAGMA journal_mode=WAL")
     db.row_factory = sqlite3.Row
     db.executescript("""
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, input TEXT NOT NULL, created TEXT NOT NULL);

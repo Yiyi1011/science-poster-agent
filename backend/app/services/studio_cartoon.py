@@ -142,15 +142,22 @@ def frame(plan, phase, heading=""):
     if plan.relationship in {"sequence","exchange"}:
         for left,right in zip(positions,positions[1:]):
             y=312; start=left+95;end=right-95
-            draw.line((start,y,end,y),fill="#386074",width=4)
-            draw.polygon([(end,y),(end-12,y-8),(end-12,y+8)],fill="#61d7d0")
-            for k in range(3):
-                x=start+(end-start)*((phase*1.7+k/3)%1)
-                draw.ellipse((x-5,y-5,x+5,y+5),fill="#ffdc78")
             if plan.relationship == "exchange":
-                y+=32;draw.line((start,y,end,y),fill="#386074",width=4)
-                draw.polygon([(start,y),(start+12,y-8),(start+12,y+8)],fill="#ffdc78")
-                x=end-(end-start)*((phase*1.7)%1);draw.ellipse((x-6,y-6,x+6,y+6),fill="#61d7d0")
+                # 双向交换：同一水平线两端各画一个箭头，视觉上明确是互发信息而非单向流程。
+                draw.line((start,y,end,y),fill="#61d7d0",width=5)
+                draw.polygon([(end,y),(end-14,y-9),(end-14,y+9)],fill="#61d7d0")
+                draw.polygon([(start,y),(start+14,y-9),(start+14,y+9)],fill="#ffdc78")
+                for direction in (1,-1):
+                    t=(phase*1.7+(0 if direction==1 else .5))%1
+                    x=start+(end-start)*t if direction==1 else end-(end-start)*t
+                    draw.ellipse((x-5,y+direction*18-5,x+5,y+direction*18+5),
+                                 fill="#ffdc78" if direction==1 else "#61d7d0")
+            else:
+                draw.line((start,y,end,y),fill="#386074",width=4)
+                draw.polygon([(end,y),(end-12,y-8),(end-12,y+8)],fill="#61d7d0")
+                for k in range(3):
+                    x=start+(end-start)*((phase*1.7+k/3)%1)
+                    draw.ellipse((x-5,y-5,x+5,y+5),fill="#ffdc78")
     for i,(actor,x) in enumerate(zip(plan.actors,positions)):
         local=max(0,min(1,phase*5-i*.55)); entrance=(1-local)**3*100
         bob=math.sin(phase*math.pi*3+i)*5

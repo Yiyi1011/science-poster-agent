@@ -48,6 +48,32 @@ def srt_time(seconds):
     return f"{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}"
 
 
+def complete_sentence_captions(value):
+    """Keep complete sentences in one timed cue; visual wrapping is handled separately."""
+    text = value.strip()
+    if not text:
+        return []
+    endings = set("。！？!?．.")
+    closers = set("”’\"'」』）)]")
+    pieces, current, ended = [], "", False
+    for char in text:
+        if ended and char not in closers:
+            pieces.append(current.strip())
+            current, ended = char, char in endings
+        else:
+            current += char
+            if char in endings:
+                ended = True
+    if current.strip():
+        tail = current.strip()
+        # A short unpunctuated tail is usually a fragment of the preceding sentence.
+        if pieces and not any(tail.endswith(mark) for mark in endings) and len(tail) <= 12:
+            pieces[-1] += tail
+        else:
+            pieces.append(tail)
+    return pieces
+
+
 def wav_pcm_duration(path):
     """Use bytes actually present; some Qwen WAV downloads advertise an oversized data chunk."""
     with wave.open(str(path), "rb") as audio:
@@ -112,12 +138,13 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
     fps = 20 if cartoon_plans else FPS
     end_times, cursor, captions, subtitles = [], 0.0, [], []
     for scene, duration, voice_duration in zip(draft.scenes, durations, voice_durations, strict=True):
-        pieces = [scene.narration[i:i + 22] for i in range(0, len(scene.narration), 22)]
+        pieces = complete_sentence_captions(scene.narration)
         t = cursor + (duration - voice_duration) / 2
         for piece in pieces:
             end = t + voice_duration * len(piece) / len(scene.narration)
             captions.append((t, end, piece))
-            subtitles.append(f"{len(captions)}\n{srt_time(t)} --> {srt_time(end)}\n{piece}\n")
+            screen_lines = "\n".join(wrap_pixels(piece, subtitle_font, W - 140))
+            subtitles.append(f"{len(captions)}\n{srt_time(t)} --> {srt_time(end)}\n{screen_lines}\n")
             t = end
         cursor += duration
         end_times.append(cursor)
@@ -158,10 +185,17 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
                 if not cartoon_plans:
                     draw.text((44, 18), f"{scene_index + 1:02}  {draft.scenes[scene_index].heading}", font=title_font, fill="#ffda83")
                     draw.text((44, 64), "AI插画有声预览 · 概念类比 · 待终审", font=small_font, fill="#75d9c4")
-                draw.rounded_rectangle((42, 598, W - 42, 685), radius=16, fill="#174550")
                 cap_start, cap_end, cap_text = captions[caption_index]
                 caption = cap_text if cap_start <= seconds < cap_end else ""
-                draw.text(((W - subtitle_font.getlength(caption)) / 2, 620), caption, font=subtitle_font, fill="white")
+                caption_lines = wrap_pixels(caption, subtitle_font, W - 140)
+                line_height = subtitle_font.size + 9
+                box_height = max(87, len(caption_lines) * line_height + 28)
+                box_top, box_bottom = 685 - box_height, 685
+                draw.rounded_rectangle((42, box_top, W - 42, box_bottom), radius=16, fill="#174550")
+                text_y = box_top + (box_height - len(caption_lines) * line_height) / 2
+                for line in caption_lines:
+                    draw.text(((W - subtitle_font.getlength(line)) / 2, text_y), line, font=subtitle_font, fill="white")
+                    text_y += line_height
                 draw.rectangle((0, H - 6, W * seconds / cursor, H), fill="#ffda83")
                 if cartoon_plans:
                     draw.text((44, 689), "千问规划 · 程序卡通动画 · AI旁白 · 待人工终审",font=small_font,fill="#75d9c4")
@@ -174,4 +208,4 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
                 process.kill(); process.wait()
     return {"duration_seconds": round(cursor, 3), "resolution": [W, H], "fps": fps,
             "video": "preview.mp4", **({"poster": "poster.png"} if not cartoon_plans else {}), "subtitles": "subtitles.srt",
-            "timing_note": "逐镜采用真实配音时长；镜内字幕按字数分配，非逐字强制对齐"}
+            "timing_note": "逐镜采用真实配音时长；完整句子保持在同一字幕块并在画面内换行，非逐字强制对齐"}

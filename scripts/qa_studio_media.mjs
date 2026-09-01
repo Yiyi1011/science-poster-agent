@@ -5,7 +5,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {chromium} = await import(pathToFileURL(resolve(process.argv[2])).href);
 const id = process.argv[3];
-const out = resolve('evidence/studio-v042/browser-media');
+const out = resolve('evidence/studio-v043/browser-media');
 await mkdir(out,{recursive:true});
 const browser = await chromium.launch({channel:'msedge',headless:true});
 const errors=[];
@@ -24,7 +24,7 @@ try {
   const video=page.locator('.studio-media video');
   await video.waitFor();
   const videoSrc=await video.getAttribute('src');
-  assert(videoSrc?.includes('preview-20260901T045502688804Z.mp4'),'page did not select the corrected video revision');
+  assert(videoSrc?.includes('preview-20260901T053314449721Z.mp4'),'page did not select the complete-sentence subtitle revision');
   await video.evaluate(v=>new Promise((resolve,reject)=>{
     if(v.readyState>=1) return resolve();
     v.onloadedmetadata=resolve; v.onerror=()=>reject(new Error('video failed'));

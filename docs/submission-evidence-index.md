@@ -4,6 +4,7 @@
 
 | 模板/评审关注点 | 可提交证据 | 当前状态 |
 |---|---|---|
+| v0.4.3完整句字幕与交接回退 | `docs/versions/process/v0.4.3-preview.md`、`docs/CLAUDE_DEEPSEEK_HANDOFF.md`、本机私有备份manifest | 完整句保持同一cue，长句画面内换行；4/8/40秒抽帧通过。代码包、Git历史与不含`.env`的私有运行数据分开备份；Claude/DeepSeek不得替换生产Qwen |
 | v0.4.2字幕纠错与自动制作可视化 | `docs/versions/process/v0.4.2-preview.md`、`evidence/studio-v042/browser-media/`、本机媒体修正记录 | 用户发现首句字幕重复后定位为Qwen WAV异常数据长度头；零模型调用重合成，旧片保留。第3/15/28秒抽帧字幕不同；右侧真实阶段、自动切换播放器及证据页修订入口已验证 |
 | v0.4.1失败恢复与跨主题可靠性 | `docs/versions/process/v0.4.1-preview.md`、`evidence/studio-v041/`、本机项目媒体记录 | AI主题旧脚本在3次结构失败后由新版成功生成6镜68秒MP4；4处装饰图标机械兼容可见且未改科学文字。API基础问题在百炼搜索短暂异常时仍读取MDN/AWS两份原文，生成8镜并通过自动审核；本轮未重复生成API视频 |
 | v0.4视频默认、海报选做与基础问题 | `docs/versions/process/v0.4.0-preview.md`、`evidence/studio-v040/`、`artifacts/studio-media/` | API自动审核后生成6镜68秒卡通MP4；千问规划＋程序动作＋AI旁白字幕，不是原生视频模型。插画实验和卡通首轮箭头误导分别保留人工问题记录，不冒充自动科学认证 |

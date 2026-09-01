@@ -349,3 +349,13 @@ def test_cartoon_composition_has_video_and_subtitles_but_no_default_poster(tmp_p
     lines=[line for line in subtitles.splitlines() if "-->" in line]
     assert lines and all(not line.startswith("-") for line in lines)
     assert lines[-1].endswith("00:00:01,500")
+
+
+def test_video_captions_keep_complete_sentences_and_merge_short_tail():
+    from app.services.studio_video import complete_sentence_captions
+    text="AI像人说话，是因为学了大量人类语言。但这只是常见组合方式，并不保证内容正确。"
+    assert complete_sentence_captions(text) == [
+        "AI像人说话，是因为学了大量人类语言。",
+        "但这只是常见组合方式，并不保证内容正确。",
+    ]
+    assert complete_sentence_captions("第一句话已经完整。补充说明") == ["第一句话已经完整。补充说明"]

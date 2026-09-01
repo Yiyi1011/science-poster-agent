@@ -13,7 +13,8 @@
 | [process/v0.3.0-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.3.0-preview) | 公众文案与证据分层、6—8镜、问题自动检索入口 | 查纯脚本阶段；[变更和局限](process/v0.3.0-preview.md) |
 | [process/v0.4.0-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.0-preview) | 基础问题检索、详细讲解；默认卡通MP4、AI旁白字幕，海报选做 | 查首个视频优先版；[变更和局限](process/v0.4.0-preview.md) |
 | [process/v0.4.1-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.1-preview) | 修复卡通规划结构中断、官方资料后备与摘录超长清空 | 查结构修复与首条AI主题成片；[变更和局限](process/v0.4.1-preview.md) |
-| [process/v0.4.2-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.2-preview) | 修复WAV异常头导致字幕首句重复；右侧显示真实制作进度并自动切换成片 | 最新制作版本；[变更和局限](process/v0.4.2-preview.md) |
+| [process/v0.4.2-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.2-preview) | 修复WAV异常头导致字幕首句重复；右侧显示真实制作进度并自动切换成片 | 查时间轴与制作台修复；[变更和局限](process/v0.4.2-preview.md) |
+| [process/v0.4.3-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.3-preview) | 完整句字幕与自适应换行；Claude＋DeepSeek提示词、私有数据备份和回退交接 | 最新制作/交接版本；[变更和局限](process/v0.4.3-preview.md) |
 
 旧标签原样保留，不移动、不重写历史。以后制作里程碑统一用 `process/v版本号-preview`；每次标签对应一个明确的Git提交，而不是把所有历史文件复制到当前目录。
 

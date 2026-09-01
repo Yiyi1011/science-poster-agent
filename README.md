@@ -1,6 +1,6 @@
 # Science Poster Agent / 跨主题科普视频智能体（暂名）
 
-> 当前是**制作过程版**，不是最终交付版。先看[版本导航](docs/versions/README.md)、[代码文件索引](docs/CODE_MAP.md)和[当前变更说明](docs/versions/process/v0.4.2-preview.md)。制作历史与[最终交付区](docs/versions/final/README.md)分开保存，最终版尚未发布。
+> 当前是**制作过程版**，不是最终交付版。先看[版本导航](docs/versions/README.md)、[代码文件索引](docs/CODE_MAP.md)和[当前变更说明](docs/versions/process/v0.4.3-preview.md)。制作历史与[最终交付区](docs/versions/final/README.md)分开保存，最终版尚未发布。
 
 新版工作台**默认生成科普视频，海报选做**：问题→按领域找资料→通俗讲解和6—8镜→检查修订→千问规划卡通对象/动作→视觉检查→AI旁白与字幕→MP4。画风与约60—90秒节奏参考太阳动画，属于程序卡通动画，不是视频大模型原生角色电影。完整讲解、理解小问题、证据和修改对比在次级入口；仍可选择只准备脚本。初步回答不冒充已核实来源；资料不足或审核不过会停止。以下早期清单含太阳专用流程，不代表全部已泛化。
 
@@ -35,7 +35,7 @@
 
 ## 版本备份与接手制作
 
-Git历史从2026-08-31首次导入开始，版本说明见`VERSION_NOTES.md`。GitHub私有仓库创建、接手运行、bundle恢复及公网部署门槛见`docs/github-and-handoff.md`。仓库不包含`.env`、本地数据库、账单或完整原始生成档案；这些资料需在脱敏后另行交接。
+Git历史从2026-08-31首次导入开始，版本说明见`VERSION_NOTES.md`。GitHub私有仓库创建、接手运行、bundle恢复及公网部署门槛见`docs/github-and-handoff.md`；Claude＋DeepSeek继续开发的材料清单和可复制提示词见`docs/CLAUDE_DEEPSEEK_HANDOFF.md`。仓库不包含`.env`、本地数据库、账单或完整原始生成档案；这些资料需在脱敏后另行交接。
 
 以下双击启动器仍有待处理的Windows兼容/等待问题，接手运行优先使用交接文档中的手动启动命令。代码备份不等同已部署公网。
 

@@ -285,10 +285,10 @@ export default function Studio() {
           </fieldset>
           {project && <p className="studio-hint">资料已随项目保存。更换资料请<button type="button" className="studio-link" disabled={locked} onClick={() => newInput(input)}>复制为新项目</button>，旧作品不会被覆盖。</p>}
           <label className="studio-auto-source"><input type="checkbox" checked={textOnly} disabled={locked} onChange={e => setTextOnly(e.target.checked)} />这次只准备讲解与脚本，暂不制片</label>
-          <p className="studio-hint">默认自动制作AI旁白＋完整句字幕的卡通视频，目标约60—90秒；会调用百炼并产生费用。</p>
+          <p className="studio-hint">默认自动制作AI旁白＋完整句字幕的卡通视频，目标约60—90秒。</p>
           <button className="studio-primary" disabled={locked || Boolean(latest)}>{locked ? "处理中，请稍候…" : latest ? "已保存 · 在右侧查看或修订" : textOnly ? "生成讲解并自动审核 →" : "生成科普视频 →"}</button>
         </form>
-        <p className="studio-hint">资料仅进入本项目，不混用太阳知识库。提交后会发送至百炼；请勿粘贴密钥或未获授权的私人资料。</p>
+        <p className="studio-hint">您提交的资料仅用于本项目。</p>
         {error && <p role="alert" className="studio-error">{error}</p>}
       </aside>
       <section className="studio-results" aria-label="创作结果">

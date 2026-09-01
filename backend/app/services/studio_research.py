@@ -46,7 +46,11 @@ DOMAIN_BACKSTOPS = {
     "science": [("月亮", "https://science.nasa.gov/moon/", "NASA 月球指南"),
                 ("月亮", "https://science.nasa.gov/moon/moon-phases/", "NASA 月相说明"),
                 ("太阳", "https://science.nasa.gov/sun/", "NASA 太阳页面"),
-                ("地球", "https://science.nasa.gov/earth/", "NASA 地球页面")],
+                ("地球", "https://science.nasa.gov/earth/", "NASA 地球页面"),
+                ("天空", "https://spaceplace.nasa.gov/blue-sky/en/", "NASA Space Place：天空为什么是蓝色"),
+                ("蓝色", "https://spaceplace.nasa.gov/blue-sky/en/", "NASA Space Place：天空为什么是蓝色"),
+                ("散射", "https://spaceplace.nasa.gov/blue-sky/en/", "NASA Space Place：天空为什么是蓝色"),
+                ("夕阳", "https://spaceplace.nasa.gov/blue-sky/en/", "NASA Space Place：天空为什么是蓝色")],
     "education": [("复习", "https://ies.ed.gov/ncee/wwc/PracticeGuide/1", "IES 实践指南：如何组织学习与复习"),
                   ("记忆", "https://ies.ed.gov/ncee/wwc/PracticeGuide/1", "IES 实践指南：组织学习与记忆"),
                   ("间隔", "https://ies.ed.gov/ncee/wwc/PracticeGuide/1", "IES 实践指南：间隔复习"),
@@ -337,9 +341,18 @@ async def research(client, question, progress):
             try:
                 url = safe_public_url(str(entry.get("url", "")))
             except ValueError:
-                # Never persist rejected URLs: they could contain signed parameters/secrets.
-                events.append({"url": "", "state": "跳过：来源域名或URL安全规则不满足"})
-                continue
+                # Search plugins often append tracking parameters to an otherwise
+                # allowed page; retry once with the query stripped before giving up.
+                original = str(entry.get("url", ""))
+                try:
+                    stripped = urlsplit(original)._replace(query="").geturl()
+                    url = safe_public_url(stripped) if stripped != original else ""
+                except ValueError:
+                    url = ""
+                if not url:
+                    # Never persist rejected URLs: they could contain signed parameters/secrets.
+                    events.append({"url": "", "state": "跳过：来源域名或URL安全规则不满足"})
+                    continue
             if url in seen:
                 continue
             seen.add(url)

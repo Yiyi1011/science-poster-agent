@@ -233,6 +233,7 @@ def test_invalid_review_candidate_is_ignored_and_second_round_can_recover():
     with patch.object(pipeline, "settings", replace(settings, mock_ai=False)), patch.object(pipeline.QwenClient, "studio_json", side_effect=model):
         asyncio.run(pipeline.execute(project["id"], request))
     result = store.get_project(project["id"])
+    print("DEBUG run state:", result["runs"][-1]["state"], "| stage:", (result["runs"][-1].get("stage") or "")[:60], "| error:", (result["runs"][-1].get("error") or "")[:200])
     assert result["runs"][-1]["state"] == "succeeded"
     assert result["versions"][-1]["draft"]["scenes"][0]["narration"] == repaired["scenes"][0]["narration"]
     assert not responses
@@ -308,6 +309,48 @@ def test_rejected_final_revision_falls_back_to_accepted_version_without_blocking
     assert not responses
 
 
+def test_primer_fallback_generates_video_when_research_finds_no_pages():
+    # User decision: when no public page can be fetched and verified, the AI preliminary
+    # answer becomes the sole labelled content basis instead of blocking the run.
+    from app.services import studio_research as research_mod
+    from app.studio_models import ProjectInput, Source
+    project = store.create_project(ProjectInput(topic="为什么天空是蓝色的？", audience="普通公众", sources=[], auto_sources=True))
+    request = run_input(0)
+    primer = "天空呈蓝色、夕阳呈红色，都是因为阳光穿过大气时发生的瑞利散射。蓝光波长较短，更容易被空气中的分子散射到各个方向，所以白天我们看到整个天空是蓝色的。"
+    snapshot = {"sources": [], "gap": "暂未找到可读取且能直接支持该问题的可信资料。系统已自动尝试同义词、官方机构、高校与专业组织来源。",
+                "explanation": {"answer": primer, "domain": "science", "queries": ["天空 蓝色 原理"], "status": "model_background_unverified"},
+                "events": [{"url": "", "state": "跳过：来源域名或URL安全规则不满足"}], "calls": [], "selected": []}
+    primer_input = ProjectInput.model_validate({"topic": "为什么天空是蓝色的？", "audience": "普通公众", "auto_sources": True, "sources": [{
+        "source_id": "S1", "title": "AI初步解释（未找到可核对网页，内容未经外部来源核实）", "url": "", "text": primer}]})
+    base = pipeline.mock_draft(primer_input).model_dump()
+    responses = [
+        base,                                # generate: real model returns a bare draft
+        {"findings": [], "revised": None},   # round 1 review: keep base draft
+        {"findings": [], "revised": None},   # round 1 recheck
+    ]
+    async def model(*args):
+        purpose = args[-1]
+        if purpose == "studio_rebuild":
+            return base, {"purpose": purpose}
+        return responses.pop(0), {"purpose": purpose}
+
+    async def fake_research(client, topic, progress):
+        progress("读取公开原文（已获得0份，最多6份）")
+        return snapshot
+
+    store.reserve(project["id"], request)
+    with patch.object(pipeline, "settings", replace(settings, mock_ai=False)), patch.object(research_mod, "research", new=fake_research), patch.object(pipeline.QwenClient, "studio_json", side_effect=model):
+        asyncio.run(pipeline.execute(project["id"], request))
+    result = store.get_project(project["id"])
+    assert result["runs"][-1]["state"] == "succeeded"
+    latest = result["versions"][-1]
+    assert latest["review_status"] != "blocked"
+    assert latest["draft"]["claims"][0]["source_id"] == "S1"
+    assert "AI初步解释" in latest["draft"]["claims"][0]["quote"] or all(
+        c["quote"] in primer for c in latest["draft"]["claims"])
+    assert any("AI初步解释" in v.get("fallback_reason", "") for v in result["versions"])
+
+
 def test_blocked_first_round_still_blocks_run_when_no_accepted_version_exists():
     source = data()
     project = store.create_project(source)
@@ -329,3 +372,38 @@ def test_blocked_first_round_still_blocks_run_when_no_accepted_version_exists():
     result = store.get_project(project["id"])
     assert result["runs"][-1]["state"] == "blocked"
     assert result["runs"][-1]["stage"] == "正在补充可靠资料"
+
+
+def test_stale_zero_source_research_is_rerun_not_reused():
+    # A project whose stored research snapshot has zero sources (old failure or old
+    # code) must trigger a fresh search on re-run instead of reusing the dead end.
+    from app.services import studio_research as research_mod
+    from app.studio_models import ProjectInput, Source
+    project = store.create_project(ProjectInput(topic="为什么天空是蓝色的？", audience="普通公众", sources=[], auto_sources=True))
+    stale = {"sources": [], "gap": "暂未找到可读取且能直接支持该问题的可信资料。",
+             "explanation": {"answer": "旧的初步回答。", "domain": "science", "queries": ["天空 蓝色"], "status": "model_background_unverified"},
+             "events": [], "calls": [], "selected": []}
+    store.save_research(project["id"], stale)
+    request = run_input(0)
+    fresh_text = "阳光穿过大气层时会被空气中的气体分子散射。蓝光波长较短，被散射得最厉害，所以我们看到的天空是蓝色的。"
+    fresh = {"sources": [{"source_id": "S1", "title": "NASA Space Place：天空为什么是蓝色",
+                          "url": "https://spaceplace.nasa.gov/blue-sky/en/", "text": fresh_text}],
+             "gap": "", "explanation": {"answer": "阳光穿过大气层时会被空气分子散射，蓝光波长较短被散射得最厉害，所以天空呈蓝色；夕阳时阳光斜穿更厚的大气，蓝光被散射殆尽，剩下红光直达眼睛。", "domain": "science", "queries": ["天空 蓝色"], "status": "model_background_unverified"},
+             "events": [{"url": "https://spaceplace.nasa.gov/blue-sky/en/", "state": "原文已提取"}], "calls": [], "selected": []}
+    base = pipeline.mock_draft(ProjectInput.model_validate({"topic": "为什么天空是蓝色的？", "audience": "普通公众", "auto_sources": True, "sources": [
+        {"source_id": "S1", "title": "NASA Space Place：天空为什么是蓝色", "url": "https://spaceplace.nasa.gov/blue-sky/en/", "text": fresh_text}]})).model_dump()
+    responses = [base] + [{"findings": [], "revised": None}] * 4
+    async def model(*args):
+        return responses.pop(0), {"purpose": args[-1]}
+    searched = []
+    async def fake_research(client, topic, progress):
+        searched.append(topic)
+        return fresh
+    store.reserve(project["id"], request)
+    with patch.object(pipeline, "settings", replace(settings, mock_ai=False)), patch.object(research_mod, "research", new=fake_research), patch.object(pipeline.QwenClient, "studio_json", side_effect=model):
+        asyncio.run(pipeline.execute(project["id"], request))
+    result = store.get_project(project["id"])
+    assert searched == ["为什么天空是蓝色的？"], "0-source snapshot must trigger a fresh research run"
+    assert result["runs"][-1]["state"] == "succeeded"
+    assert result["versions"][-1]["draft"]["claims"][0]["source_id"] == "S1"
+    assert not any(v.get("fallback_reason", "").startswith("未找到可核对的公开网页") for v in result["versions"])

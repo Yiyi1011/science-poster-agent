@@ -225,7 +225,7 @@ def test_research_retry_and_project_archive_are_traceable_and_recoverable():
     assert p["id"] in {item["id"] for item in store.list_projects()}
 
 
-def test_failed_research_stops_generation_and_is_not_automatically_rebilled():
+def test_failed_research_is_reattempted_on_rerun_but_never_generates_without_evidence():
     p = store.create_project(ProjectInput(topic="未知问题", auto_sources=True))
     async def empty(*args): return {"sources": [], "gap": "没有证据"}
     async def no_generation(*args): raise AssertionError("must not generate")
@@ -234,7 +234,9 @@ def test_failed_research_stops_generation_and_is_not_automatically_rebilled():
             request = RunInput(request_id=uuid4(), expected_version=0)
             store.reserve(p["id"], request)
             asyncio.run(pipeline.execute(p["id"], request))
-        assert calls.call_count == 1
+        # A zero-source snapshot is a failed attempt, not a verdict: each re-run starts a
+        # fresh search (no AI preliminary answer here, so the run still stops, unbilled).
+        assert calls.call_count == 2
     result = store.get_project(p["id"])
     assert not result["versions"]
     assert all(r["state"] == "blocked" for r in result["runs"])

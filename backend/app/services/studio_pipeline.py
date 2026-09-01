@@ -57,6 +57,11 @@ PUBLIC_PROMPT = """
 """
 BASE_PROMPT += PUBLIC_PROMPT
 GEN_PROMPT = BASE_PROMPT + "生成一张海报和6—8个独立通俗分镜。最多4条核心事实，尽量覆盖定义、机制、例子及边界。紧扣topic，资料不支持时不偷换主题。"
+# When no public page could be fetched and verified, the AI preliminary answer becomes
+# the sole content basis (user decision, explicitly labelled). The wording deliberately
+# avoids the blocker trigger words 机制/为何/为什么; the label text is user-visible.
+PRIMER_FALLBACK_NOTE = ("注意：本项目未找到可核对的公开网页，sources中的S1是AI初步解释，未经外部来源核实。"
+                        "必须只使用S1原文中的内容组织作品，不得添加S1原文没有的新事实、数字或例子。作品证据层会明确标注这一点。")
 REVIEW_PROMPT = BASE_PROMPT + """你现在是审核编辑。旧稿可能不合格，不必保留它的错误例子或措辞；逐项修复previous_findings和communication_findings。
 来源未提供的真实地名、人名、年代、数字例子必须移除，换成明确标注的抽象情境。不能用新增常识来证明旧稿错误例子。
 不要把‘预测下一个词’扩大成‘不查事实/不理解/不思考/只选最常见的词’等绝对论断。
@@ -308,14 +313,32 @@ async def execute(project_id, request):
             calls = []
             mechanical_changes = []
             fallback_notes = []
+            research_snapshot = None  # set by the research block; read by the template fallback
+
+            def data_with_research(snapshot):
+                """Attach verified research excerpts; when none could be fetched, the AI
+                preliminary answer becomes the sole labelled content basis (no new facts).
+                Never in mock mode: mocks keep their own placeholder flow."""
+                sources = snapshot.get("sources") or []
+                if sources:
+                    data = ProjectInput.model_validate(dict(project["input"], sources=sources))
+                    return data, snapshot.get("gap", ""), False
+                primer = (snapshot.get("explanation") or {}).get("answer") or ""
+                if primer and not settings.mock_ai:
+                    fallback_notes.append("未找到可核对的公开网页，本片基于AI初步解释生成，内容未经外部来源核实")
+                    return (ProjectInput.model_validate(dict(project["input"], sources=[{
+                        "source_id": "S1",
+                        "title": "AI初步解释（未找到可核对网页，内容未经外部来源核实）",
+                        "url": "", "text": primer}])), PRIMER_FALLBACK_NOTE, True)
+                return None, "", False
 
             def use_deterministic_fallback(error, step):
                 """Brief 6.4.6: never fake model planning success; keep a reviewable template draft."""
                 from app.services.studio_fallback import deterministic_fallback_draft
                 reason = f"千问规划及{step}均未通过（{type(error).__name__}），改用本地确定性6镜模板（内容待人工核实）"
                 fallback_notes.append(reason)
-                snapshot = project.get("research") or {}
-                primer_answer = (snapshot.get("explanation") or {}).get("answer", "")
+                current = research_snapshot or project.get("research") or {}
+                primer_answer = (current.get("explanation") or {}).get("answer", "")
                 store.stage(request_id, "模型规划未通过，保留本地模板初稿并标记待人工核实", "needs_human_review")
                 return deterministic_fallback_draft(data, primer_answer)[0]
             def normalize_icons(raw):
@@ -379,16 +402,17 @@ async def execute(project_id, request):
             if not data.sources and data.auto_sources and not settings.mock_ai:
                 from app.services.studio_research import research
                 snapshot = project.get("research")
-                if snapshot is None or request.rebuild:
+                # 0-source snapshot means the previous research run failed (or predates the
+                # latest backstop catalog); re-running must re-search instead of reusing it.
+                if snapshot is None or request.rebuild or not (snapshot.get("sources") or []):
                     snapshot = await research(client, data.topic, lambda label: store.stage(request_id, label))
                     if project.get("research") is None:
                         store.save_research(project_id, snapshot)
                     else:
                         store.append_research(project_id, snapshot)
-                if snapshot.get("sources"):
-                    data = ProjectInput.model_validate(dict(project["input"], sources=snapshot["sources"]))
-                    research_gap = snapshot.get("gap", "")
-                else:
+                data, research_gap, primer_based = data_with_research(snapshot)
+                research_snapshot = snapshot
+                if data is None:
                     store.stage(request_id, "自动换词检索后仍无法可靠核实", "blocked",
                                 snapshot.get("gap") or "系统暂时无法从可读的权威网页核实该问题。")
                     return
@@ -515,6 +539,8 @@ async def execute(project_id, request):
         raise
     except Exception as exc:
         # Never include provider response bodies/URLs/credentials in client-visible errors.
+        import traceback
+        traceback.print_exc()
         fields = ""
         if isinstance(exc, ValidationError):
             fields = " 字段：" + "；".join(".".join(map(str, e["loc"])) + " (" + e["type"] + ")" for e in exc.errors(include_input=False)[:5])

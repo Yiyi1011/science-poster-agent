@@ -112,6 +112,7 @@ export default function Studio() {
   const failedMediaCount = versionMedia.filter(m => m.state === "failed").length;
   const mediaEligible = Boolean(version && version.version === latest?.version &&
     ["ai_checked_human_pending", "needs_human_review"].includes(version.review_status));
+  const primerBased = Boolean(project?.versions.some(v => (v.fallback_reason ?? "").includes("AI初步解释")));
   const mediaUrl = (name: string) => `${api}/projects/${project!.id}/media/${selectedMedia!.id}/${encodeURIComponent(name)}`;
 
   useEffect(() => { Promise.all([request<Summary[]>(`${api}/projects`), request<{ mock_ai: boolean; text_model: string }>("/api/config/public")])
@@ -263,8 +264,8 @@ export default function Studio() {
       <section className="studio-results" aria-label="创作结果">
         <div className="studio-result-header"><h2>02 作品与改进</h2>{(run || selectedMedia) && <span role="status" className={running ? "studio-working" : ""}>{activeStage || selectedMedia?.stage || run?.stage}</span>}</div>
         {run?.error && <p className="studio-error">{run.error}</p>}
-        {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 问题初解</summary><p>{project.research.explanation.answer}</p><small>这是检索前的导读；实际作品以后续资料核对和修订结果为准。</small></details>}
-        {project?.research && !project.research.sources.length && !running && <div className="studio-research"><button onClick={() => newInput(input)}>复制问题，使用新版重新检索</button><small>旧失败记录保留；复制后点击生成会发起新的百炼调用。</small></div>}
+        {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 问题初解</summary><p>{project.research.explanation.answer}</p><small>{primerBased ? "未找到可核对的公开网页时，此初步回答直接作为作品基础（内容未经外部来源核实）。" : "这是检索前的导读；实际作品以后续资料核对和修订结果为准。"}</small></details>}
+        {project?.research && !project.research.sources.length && !running && <div className="studio-research">{primerBased && <p className="studio-hint">未找到可核对的公开网页，本片基于AI初步解释生成，内容未经外部来源核实。</p>}<button onClick={() => newInput(input)}>复制问题，使用新版重新检索</button><small>旧失败记录保留；复制后点击生成会发起新的百炼调用。</small></div>}
         {project?.research && <details className="studio-research"><summary>自动查找的资料 · {project.research.sources.length}份原文摘录</summary>
           {project.research.sources.map(s => <article key={s.source_id}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.source_id} · {s.title} ↗</a><p>{project.research!.selected.find(p => p.source_id === s.source_id)?.reason}</p><details><summary>查看原文摘录</summary><blockquote>{s.text}</blockquote></details></article>)}
           {project.research.gap && <p>{project.research.gap}</p>}<small>搜索命中和逐字匹配不等于科学认证。自动读取暂限公开HTML；不会绕过付费墙或登录。</small>
@@ -283,8 +284,8 @@ export default function Studio() {
               <section className="studio-media"><h3>你的科普视频</h3><p>系统会根据问题自动完成资料核对、卡通分镜、AI旁白、完整句字幕与MP4合成。完成后可直接播放或下载。</p>
                 {!selectedMedia?.video && !running && mediaEligible && <><button disabled={locked} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
                 <small>通常需要数分钟。新建项目会自动制片；这个按钮仅用于旧版或中断任务的恢复。</small></>}
-                {!selectedMedia?.video && !running && !mediaEligible && <div className="studio-error"><strong>正在等待可靠资料。</strong><br/>
-                  {version?.review_status === "blocked" ? <><span>当前检索到的内容还不足以支持完整解释。</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>继续扩大检索范围并生成视频</button><small>无需你提供论文；系统会换用同义词，查找官方机构、高校与专业组织来源。</small></> : "请先选择最新版本。"}</div>}
+                {!selectedMedia?.video && !running && !mediaEligible && <div className={primerBased ? "studio-research" : "studio-error"}><strong>{primerBased ? "本版基于AI初步解释，尚未经外部来源核实。" : "正在等待可靠资料。"}</strong><br/>
+                  {version?.review_status === "blocked" ? <><span>{primerBased ? "未找到可核对的公开网页，已用AI初步回答先行制作，人工核对后再发布。" : "当前检索到的内容还不足以支持完整解释。"}</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>继续扩大检索范围并生成视频</button><small>无需你提供论文；系统会换用同义词，查找官方机构、高校与专业组织来源。</small></> : "请先选择最新版本。"}</div>}
                 {selectedMedia?.video && <p><strong>已找到本版可播放成片（v{selectedMedia.version}）。</strong> 下方可直接播放或下载；刷新页面不会丢失。</p>}
                 {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}

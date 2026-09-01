@@ -347,3 +347,56 @@ def test_wrap_pixels_never_leaves_closing_punctuation_on_its_own_line():
     lines = wrap_pixels("这是完整的一句话。", FixedFont(), 8)
     assert lines == ["这是完整的一句话。"]
     assert all(line not in {"。", "，", "！", "？"} for line in lines)
+
+
+def test_research_science_backstop_sky_maps_to_nasa_space_place(monkeypatch):
+    from app.services import studio_research as research
+    from app.services.studio_research import Primer
+    primer = Primer(domain="science", answer="天空呈蓝色、夕阳呈红色，都是因为阳光穿过大气时发生散射。蓝光波长较短，更容易被空气分子散射到各个方向，所以白天天空是蓝色的。",
+                    queries=["天空 蓝色 官方", "sunset red official"])
+    async def fake_orient(client, question):
+        return primer, {"purpose": "orient"}
+    async def fake_search(client, query, restricted=True, sites=None):
+        return [], {"purpose": "search"}
+    page = {"url": "https://spaceplace.nasa.gov/blue-sky/en/", "title": "NASA Space Place：天空为什么是蓝色",
+            "text": "阳光穿过大气层时会被空气中的气体分子散射。蓝光波长最短，被散射得最厉害，所以我们看到的天空是蓝色的。日出日落时阳光斜穿更厚的大气，蓝光被散射殆尽，剩下红光直达眼睛，太阳因此呈红色。"}
+    async def fake_fetch(url):
+        return page["url"], page["text"]
+    class FakeClient:
+        async def studio_json(self, prompt, payload, purpose):
+            if purpose == "studio_source_selection":
+                return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"], "reason": "直接解释天空颜色成因"}], "gap": ""}, {}
+            return {"domain": "science"}, {}
+    monkeypatch.setattr(research, "orient", fake_orient)
+    monkeypatch.setattr(research, "search", fake_search)
+    monkeypatch.setattr(research, "fetch_page", fake_fetch)
+    result = asyncio.run(research.research(FakeClient(), "为什么天空是蓝色的，而夕阳是红色的？", lambda label: None))
+    assert result["sources"] and result["sources"][0]["url"] == "https://spaceplace.nasa.gov/blue-sky/en/"
+    assert any(e["state"] == "原文已提取" for e in result["events"])
+
+
+def test_research_strips_tracking_query_before_fetch(monkeypatch):
+    from app.services import studio_research as research
+    from app.services.studio_research import Primer
+    primer = Primer(domain="education", answer="间隔复习指把学习内容分开安排，中间隔一段时间，比一次性集中学习更有利于长期记忆。间隔一段时间复习关键内容是一种有效的教学安排。",
+                    queries=["学习方法 官方", "study skills university"])
+    async def fake_orient(client, question):
+        return primer, {"purpose": "orient"}
+    async def fake_search(client, query, restricted=True, sites=None):
+        return [{"url": "https://ies.ed.gov/ncee/wwc/PracticeGuide/1?utm_source=qwen&utm_medium=test",
+                 "title": "IES Practice Guide"}], {"purpose": "search"}
+    page = {"url": "https://ies.ed.gov/ncee/wwc/PracticeGuide/1", "title": "IES Practice Guide",
+            "text": "间隔复习指把学习内容分开安排，中间隔一段时间，比一次性集中学习更有利于长期记忆。间隔一段时间复习关键内容是一种有效的教学安排。"}
+    async def fake_fetch(url):
+        return page["url"], page["text"]
+    class FakeClient:
+        async def studio_json(self, prompt, payload, purpose):
+            if purpose == "studio_source_selection":
+                return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"], "reason": "直接解释间隔复习"}], "gap": ""}, {}
+            return {"domain": "education"}, {}
+    monkeypatch.setattr(research, "orient", fake_orient)
+    monkeypatch.setattr(research, "search", fake_search)
+    monkeypatch.setattr(research, "fetch_page", fake_fetch)
+    result = asyncio.run(research.research(FakeClient(), "间隔复习为什么有效？", lambda label: None))
+    assert result["sources"] and result["sources"][0]["url"] == "https://ies.ed.gov/ncee/wwc/PracticeGuide/1"
+    assert not any("跳过" in e["state"] for e in result["events"])

@@ -285,6 +285,7 @@ export default function Studio() {
       </aside>
       <section className="studio-results" aria-label="创作结果">
         <div className="studio-result-header"><h2>02 作品与改进</h2>{(run || selectedMedia) && <span role="status" className={running ? "studio-working" : ""}>{activeStage || selectedMedia?.stage || run?.stage}</span>}</div>
+        <div className="studio-results-body">
         {run?.error && <p className="studio-error">{run.error}</p>}
         {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 问题初解</summary><p>{project.research.explanation.answer}</p><small>{primerBased ? "未找到可核对的公开网页时，此初步回答直接作为作品基础（内容未经外部来源核实）。" : "这是检索前的导读；实际作品以后续资料核对和修订结果为准。"}</small></details>}
         {project?.research && !project.research.sources.length && !running && primerBased && <p className="studio-hint">未找到可核对的公开网页，本片基于AI初步解释生成，内容未经外部来源核实。</p>}
@@ -358,6 +359,7 @@ export default function Studio() {
             </section>}
           </div>
         </>}
+        </div>
       </section>
     </div>
     {preview && <div className="studio-lightbox" role="dialog" aria-modal="true" aria-label="海报大图" onClick={() => setPreview(false)}><button autoFocus onClick={() => setPreview(false)}>关闭 ×</button><img src={posterUrl} alt={draft?.title} onClick={e => e.stopPropagation()} /></div>}

@@ -42,19 +42,19 @@
 /* 整页固定视口：页面不滚动，仅右侧生成区内部滚动 */
 .studio{height:100dvh;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
 .studio-intro{flex:none;padding-top:18px;padding-bottom:14px}
-.studio-grid{flex:1;min-height:0}
-.studio-input{overflow-y:auto;min-height:0}
-.studio-results{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.studio-grid{flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch}
+.studio-input{height:100%;min-height:0;overflow-y:auto}
+.studio-results{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .studio-result-header,.studio-toolbar{flex:none}
-.studio-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.studio-scroll{flex:1;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain}
 @media(min-width:901px){
   .studio-input{position:static}
   .studio-results{position:static}
 }
 @media(max-width:900px){
   .studio{height:auto;display:block;overflow:visible}
-  .studio-grid{flex:none}
-  .studio-input{overflow:visible}
-  .studio-results{display:block;overflow:visible}
+  .studio-grid{flex:none;grid-template-rows:none;align-items:start}
+  .studio-input{height:auto;overflow:visible}
+  .studio-results{height:auto;display:block;overflow:visible}
   .studio-scroll{overflow:visible}
 }

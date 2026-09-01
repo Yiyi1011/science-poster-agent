@@ -70,15 +70,6 @@ def delete_project(project_id: UUID):
     return {"ok": True}
 
 
-@router.post("/projects/{project_id}/favorite")
-def favorite(project_id: UUID):
-    try:
-        favorite = store.toggle_favorite(str(project_id))
-    except KeyError:
-        raise HTTPException(404, "项目不存在") from None
-    return {"favorite": favorite}
-
-
 @router.post("/projects/{project_id}/run", status_code=202)
 async def run(project_id: UUID, request: RunInput):
     try:

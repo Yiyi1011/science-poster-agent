@@ -32,7 +32,7 @@ type Media = { id: string; version: number; state: string; stage: string; video?
 type Project = { id: string; input: Input; versions: Version[]; runs: Array<{ id: string; state: string; stage: string; error: string }>; media?: Media[] };
 type Research = { sources: Source[]; selected: Array<{ source_id: string; reason: string }>; events: Array<{ url: string; state: string }>;
   gap: string; explanation?: { answer: string; domain: string }; calls: Array<{ model: string; purpose: string; request_id: string }> };
-type Summary = { id: string; topic: string; has_video?: boolean; favorite?: boolean };
+type Summary = { id: string; topic: string; has_video?: boolean };
 const blankSource = (): Source => ({ source_id: "S1", title: "", url: "", text: "" });
 const blankInput = (): Input => ({ topic: "", audience: "普通公众", sources: [blankSource()], auto_sources: true });
 const roleNames: Record<string, string> = { hook: "问题引入", example: "生活情境", mechanism: "机制解释", process: "逐步展开", misconception: "常见误会", boundary: "适用边界", takeaway: "记住要点" };
@@ -231,17 +231,8 @@ export default function Studio() {
   }
 
   const isExample = (topic: string) => /(?:太阳(?:爆发|耀斑)|AI.*(?:答错|说得流畅)|间隔学习|重复复习)/i.test(topic);
-  const byOrder = (a: Summary, b: Summary) => Number(b.favorite ?? false) - Number(a.favorite ?? false);
-  const caseProjects = projects.filter(p => p.has_video || isExample(p.topic)).sort(byOrder);
-  const questionProjects = projects.filter(p => !p.has_video && !isExample(p.topic)).sort(byOrder);
-
-  async function toggleFavorite(p: Summary) {
-    setBusy(true); setError("");
-    try {
-      const { favorite } = await request<{ favorite: boolean }>(`${api}/projects/${p.id}/favorite`);
-      setProjects(prev => prev.map(x => x.id === p.id ? { ...x, favorite } : x));
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
+  const caseProjects = projects.filter(p => p.has_video || isExample(p.topic));
+  const questionProjects = projects.filter(p => !p.has_video && !isExample(p.topic));
 
   async function removeProject(p: Summary) {
     if (!window.confirm(`删除项目“${p.topic}”？删除后不再出现在列表中，数据和视频仍完整保留。`)) return;
@@ -265,7 +256,6 @@ export default function Studio() {
             [[caseProjects, "案例 · 已生成视频"], [questionProjects, "我的问题"]].map(([items, label]) => (items as Summary[]).length ? <section key={label as string}><h3>{label as string}<small>{(items as Summary[]).length}</small></h3>
               {(items as Summary[]).map(p => <div className={`studio-saved-row${project?.id === p.id ? " active" : ""}`} key={p.id}>
                 <button type="button" className="studio-saved-open" title={p.topic} disabled={locked} onClick={() => void openProject(p.id)}>{p.topic}</button>
-                <button type="button" className={`studio-star${p.favorite ? " on" : ""}`} aria-label={p.favorite ? "取消收藏" : "收藏"} title={p.favorite ? "取消收藏" : "收藏"} disabled={locked} onClick={() => void toggleFavorite(p)}>★</button>
                 <button type="button" className="studio-trash" aria-label="删除项目" title="删除项目" disabled={locked} onClick={() => void removeProject(p)}>✕</button>
               </div>)}
             </section> : null)}</div>

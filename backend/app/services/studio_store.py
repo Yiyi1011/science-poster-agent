@@ -29,7 +29,6 @@ def connection():
         CREATE TABLE IF NOT EXISTS research_history(project TEXT, attempt INTEGER, payload TEXT NOT NULL, created TEXT NOT NULL,
             PRIMARY KEY(project, attempt));
         CREATE TABLE IF NOT EXISTS project_archive(project TEXT PRIMARY KEY, reason TEXT NOT NULL, archived TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS project_favorites(project TEXT PRIMARY KEY, created TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS media(id TEXT PRIMARY KEY, project TEXT NOT NULL, version INTEGER NOT NULL, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS versions(project TEXT, number INTEGER, payload TEXT NOT NULL,
             PRIMARY KEY(project, number));
@@ -63,12 +62,11 @@ def list_projects():
         rows = db.execute("""SELECT p.id,p.input,p.created,
             EXISTS(SELECT 1 FROM media m WHERE m.project=p.id
                    AND json_extract(m.payload,'$.state')='succeeded'
-                   AND json_extract(m.payload,'$.video') IS NOT NULL) AS has_video,
-            EXISTS(SELECT 1 FROM project_favorites f WHERE f.project=p.id) AS favorite
+                   AND json_extract(m.payload,'$.video') IS NOT NULL) AS has_video
             FROM projects p WHERE p.id NOT IN (SELECT project FROM project_archive)
             ORDER BY p.created DESC LIMIT 100""").fetchall()
     return [{"id": r["id"], "topic": json.loads(r["input"])["topic"], "created_at": r["created"],
-             "has_video": bool(r["has_video"]), "favorite": bool(r["favorite"])} for r in rows]
+             "has_video": bool(r["has_video"])} for r in rows]
 
 
 def get_project(project_id):
@@ -116,17 +114,6 @@ def archive_project(project_id, reason):
 def restore_project(project_id):
     with connection() as db:
         db.execute("DELETE FROM project_archive WHERE project=?", (project_id,))
-
-
-def toggle_favorite(project_id):
-    """收藏/取消收藏一个项目；返回切换后的收藏状态。"""
-    with connection() as db:
-        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
-            raise KeyError("项目不存在")
-        if db.execute("DELETE FROM project_favorites WHERE project=?", (project_id,)).rowcount:
-            return False
-        db.execute("INSERT INTO project_favorites VALUES(?,?)", (project_id, now()))
-        return True
 
 
 def list_archived_projects():

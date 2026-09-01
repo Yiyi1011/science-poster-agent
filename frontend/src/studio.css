@@ -32,8 +32,5 @@
 .studio-saved-row.active{background:#e2f1e9;border-color:#8fbfae}
 .studio-saved-open{flex:1;min-width:0;text-align:left;font-size:13px;padding:8px 4px;background:none;border:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .studio-saved-open:hover{color:#176d75}
-.studio-star,.studio-trash{flex:none;padding:5px 8px;border-radius:9px;font-size:13px;line-height:1;background:#fff}
-.studio-star{color:#b9c9c4;border-color:#e0e9e5}
-.studio-star.on{color:#d49e48;border-color:#e8cf9d;background:#fdf6e8}
-.studio-trash{color:#c0655a;border-color:#efd9d2}
+.studio-trash{flex:none;padding:5px 8px;border-radius:9px;font-size:13px;line-height:1;background:#fff;color:#c0655a;border-color:#efd9d2}
 .studio-trash:hover:not(:disabled){background:#fbeee9}

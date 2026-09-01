@@ -15,3 +15,7 @@
 .studio-media small{display:block;margin-top:12px;line-height:1.7}
 .studio-media a{color:#9be5d7}
 .studio-media button{white-space:normal;text-align:left}
+.studio-downloads{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:16px 0 4px}
+.studio-download{display:inline-block;background:#ed653c;color:#fff!important;border-radius:12px;padding:11px 18px;font-weight:650;text-decoration:none}
+.studio-download:hover{background:#cf4e28}
+.studio-downloads>a:not(.studio-download){color:#9be5d7;font-size:13px}

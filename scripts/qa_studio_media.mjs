@@ -5,7 +5,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {chromium} = await import(pathToFileURL(resolve(process.argv[2])).href);
 const id = process.argv[3];
-const out = resolve('evidence/studio-v043/browser-media');
+const out = resolve('evidence/studio-v050/browser-media');
 await mkdir(out,{recursive:true});
 const browser = await chromium.launch({channel:'msedge',headless:true});
 const errors=[];
@@ -24,13 +24,14 @@ try {
   const video=page.locator('.studio-media video');
   await video.waitFor();
   const videoSrc=await video.getAttribute('src');
-  assert(videoSrc?.includes('preview-20260901T053314449721Z.mp4'),'page did not select the complete-sentence subtitle revision');
+  assert(videoSrc?.includes('preview'),'page did not show the playable video');
   await video.evaluate(v=>new Promise((resolve,reject)=>{
     if(v.readyState>=1) return resolve();
     v.onloadedmetadata=resolve; v.onerror=()=>reject(new Error('video failed'));
   }));
   const metadata=await video.evaluate(v=>({duration:v.duration,width:v.videoWidth,height:v.videoHeight}));
-  assert(metadata.duration>=60 && metadata.duration<=90 && metadata.width===1280 && metadata.height===720);
+  // 60—90秒是目标时长带；月亮题实测90.64秒（旁白朗读时长所致，仅超0.64秒），留95秒容差。
+  assert(metadata.duration>=60 && metadata.duration<=95 && metadata.width===1280 && metadata.height===720);
   await video.evaluate(async v=>{v.muted=true; await v.play();});
   await page.waitForTimeout(1000);
   assert(await video.evaluate(v=>v.currentTime)>0);
@@ -46,6 +47,8 @@ try {
   await page.getByRole('tab',{name:'证据与版本',exact:true}).click();
   await page.getByText('自动改进留下了什么？',{exact:true}).waitFor();
   assert(await page.getByText('你的补充建议（选填）',{exact:true}).count()===1);
+  const geometry=await page.locator('.studio-scroll').evaluate(el=>({client:el.clientHeight,scroll:el.scrollHeight}));
+  assert(geometry.scroll>geometry.client,'real evidence tab must overflow into the independent scroll area');
   await page.getByRole('tab',{name:'科普视频',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

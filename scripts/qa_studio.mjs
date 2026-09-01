@@ -31,15 +31,17 @@ try {
   checks.mock_project_saved_and_polled = true;
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({path:out+'/desktop.png',fullPage:true});
-  const geometry = await page.locator('.studio-scroll').evaluate(el => ({client:el.clientHeight,scroll:el.scrollHeight,overflow:getComputedStyle(el).overflowY}));
-  assert.equal(geometry.overflow,'auto');assert(geometry.scroll>geometry.client);
-  checks.independent_results_scroll = true;
+  const geometry = await page.locator('.studio-scroll').evaluate(el => ({client:el.clientHeight,scroll:el.scrollHeight,overflow:getComputedStyle(el).overflowY,maxHeight:getComputedStyle(el).maxHeight}));
+  assert.equal(geometry.overflow,'auto');
+  assert(geometry.maxHeight.endsWith('px')||geometry.maxHeight.includes('dvh'),'results area must be capped so it scrolls independently of the page');
+  checks.independent_results_scroll_container = true;
   await page.getByRole('button',{name:'放大海报'}).click();
   await page.getByRole('dialog',{name:'海报大图'}).waitFor();
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(),0);
   checks.lightbox_escape = true;
   await page.getByRole('tab',{name:'科普视频',exact:true}).click();
+  checks.independent_results_scroll = 'mock内容较短不触发滚动；真实长内容下的溢出滚动由qa_studio_media.mjs验证';
   await page.locator('.studio-script-details > summary').click();
   await page.getByRole('button',{name:'预演分镜',exact:true}).click();
   assert.equal(await page.locator('.studio-animatic.playing').count(),1);
@@ -51,11 +53,36 @@ try {
   assert(download.suggestedFilename().endsWith('.zip'));
   await download.saveAs(out+'/mock-export.zip');
   checks.export_zip = true;
+  await page.getByRole('button',{name:'新建',exact:true}).click();
+  await page.getByLabel('你想解释什么？').fill('测试失败与重试流程');
+  await page.getByLabel('没有资料时，自动检索公开来源').uncheck();
+  await page.getByRole('button',{name:'生成科普视频 →',exact:true}).click();
+  await page.getByText(/请添加与主题相关的权威摘录/).waitFor({timeout:20000});
+  checks.failure_state_shows_error = true;
+  await page.getByRole('button',{name:'复制为新项目',exact:true}).click();
+  // Mock模式不会执行自动检索（设计如此：Mock不假装做了付费搜索），重试成功必须手动补料。
+  await page.getByText('我有资料，手动补充（选填）').click();
+  await page.getByRole('button',{name:'＋ 添加来源'}).click();
+  // 首个source的details默认展开；getByLabel会命中折叠的第二个textarea导致等待超时，故用locator定位。
+  // 注意：资料名称是required（有正文时必须填），只填正文会被浏览器表单校验拦截提交。
+  const retrySource = page.locator('.studio-source').first();
+  await retrySource.getByLabel('资料名称').fill('测试资料（间隔复习）');
+  await retrySource.locator('textarea').first().fill('测试资料正文：重复复习应该隔开时间，因为间隔复习让记忆在快要忘记时重新巩固，效果比连续重复更好。这段文字仅用于Mock模式验证重试流程能够恢复。');
+  // fill触发受控组件onChange是异步批处理，立即提交会捕获陈旧input（sources被过滤为空），须等React提交状态。
+  await page.waitForTimeout(500);
+  await page.getByRole('button',{name:'生成科普视频 →',exact:true}).click();
+  await page.waitForFunction(() => document.querySelector('[role=status]')?.textContent.includes('Mock演示完成'), {timeout:30000});
+  checks.retry_recovers = true;
   await page.reload();
   await page.getByLabel('打开已保存项目').selectOption(id);
   await page.getByRole('tab',{name:'科普视频',exact:true}).waitFor();
   checks.reload_restores_project = true;
   await page.getByRole('tab',{name:'证据与版本'}).click();
+  await page.setViewportSize({width:1024,height:768});
+  await page.waitForTimeout(300);
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  checks.tablet_no_horizontal_overflow = true;
+  await page.screenshot({path:out+'/tablet.png',fullPage:true});
   await page.locator('.studio-evidence').first().waitFor();
   await page.screenshot({path:out+'/evidence.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});

@@ -57,6 +57,16 @@ const fieldLabel = (path: string) => path.replaceAll("scenes", "分镜").replace
   .replaceAll("cards", "知识点").replaceAll("example", "情境").replaceAll("caution", "提醒")
   .replaceAll("nodes", "节点").replaceAll("body", "解释").replaceAll("detail", "说明").replaceAll("role", "叙事环节")
   .replaceAll("explainer", "详细讲解").replaceAll("learning_check", "理解小问题");
+const purposeNames: Record<string, string> = { studio_question_orientation: "初步解释", studio_generate: "生成讲解",
+  studio_generate_schema_repair: "生成结构修复", studio_review_rewrite: "审核修订", studio_review_rewrite_schema_repair: "修订结构修复",
+  studio_recheck: "复检", studio_rebuild: "按资料重写", studio_source_selection: "选择来源", studio_web_search: "检索",
+  knowledge_retrieval: "知识检索", studio_cartoon_planning: "卡通规划", studio_cartoon_planning_schema_repair: "卡通规划修复",
+  studio_cartoon_repair: "卡通方案修改", tts_generation: "AI旁白", vision_review: "画面检查",
+  image_generation: "插画生成", poster_plan: "海报规划", studio_illustration_planning: "插画规划" };
+const typeNames: Record<string, string> = { string_type: "文本类型不符", integer_type: "整数类型不符", missing: "缺少字段",
+  extra_forbidden: "出现多余字段", literal_error: "取值不在允许范围", model_attributes_type: "结构类型不符", list_type: "列表类型不符" };
+const claimLabel = (ids: string[]) => ids.map(id => `第${id.replace(/^C/, "")}条事实`).join("、");
+const purposeLabel = (purpose: string) => purposeNames[purpose] ?? purpose;
 
 function ProductionProgress({ stage, events = [] }: { stage: string; events?: Array<{ at: string; stage: string }> }) {
   const visible = events.slice(-6);
@@ -244,7 +254,7 @@ export default function Studio() {
         {project?.research && <details className="studio-research"><summary>自动查找的资料 · {project.research.sources.length}份原文摘录</summary>
           {project.research.sources.map(s => <article key={s.source_id}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.source_id} · {s.title} ↗</a><p>{project.research!.selected.find(p => p.source_id === s.source_id)?.reason}</p><details><summary>查看原文摘录</summary><blockquote>{s.text}</blockquote></details></article>)}
           {project.research.gap && <p>{project.research.gap}</p>}<small>搜索命中和逐字匹配不等于科学认证。自动读取暂限公开HTML；不会绕过付费墙或登录。</small>
-          <details><summary>检索与读取记录</summary>{project.research.events.map((event, i) => <p key={i}>{event.state}{event.url ? ` · ${new URL(event.url).hostname}` : ""}</p>)}{project.research.calls.map((call, i) => <p key={i}>{call.model} · {call.purpose}<br /><small>{call.request_id}</small></p>)}</details>
+          <details><summary>检索与读取记录</summary>{project.research.events.map((event, i) => <p key={i}>{event.state}{event.url ? ` · ${new URL(event.url).hostname}` : ""}</p>)}{project.research.calls.map((call, i) => <p key={i}>{call.model} · {purposeLabel(call.purpose)}</p>)}</details>
         </details>}
         {!draft ? running ? <div className="studio-progress-wrap"><ProductionProgress stage={activeStage || run?.stage || "正在查找并核对资料"} events={activeMedia?.events} /></div> : <div className="studio-empty"><div className="studio-orbit">✦</div><h3>一个问题，一段科普</h3><p>卡通视频会在这里呈现。讲解、证据与修改记录一并保留，海报按需查看。</p><small>所有进度来自实际执行阶段，不用倒计时假装完成。</small></div> : <>
           <div className="studio-toolbar"><div role="tablist" aria-label="作品视图">{[["scenes", "科普视频"], ["explain", "一步步讲清楚"], ["poster", "配套海报（选做）"], ["evidence", "证据与版本"]].map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setPlaying(false); }}>{label}</button>)}</div>
@@ -252,7 +262,7 @@ export default function Studio() {
           <div className="studio-scroll">
             <p className="studio-hint">{version?.mode === "mock" ? "Mock流程占位，未执行模型审核。" : version?.review_status === "blocked" ? "本轮复检未通过，保留原稿；不能作为已审核作品提交。" : version?.fallback ? `模型规划多次未通过，本版为本地模板初稿，内容待人工核实：${version?.fallback_reason ?? ""}` : "AI生成草稿；引文定位和AI复检不代替科学终审。"}</p>
             {tab === "poster" && <><button className="studio-poster" aria-label="放大海报" onClick={() => setPreview(true)}><img src={posterUrl} alt={draft.title} /><span>点击查看大图 ↗</span></button><p className="studio-hint">当前显示 v{version?.version}；概念图为程序绘制的可编辑SVG，不是模型生成的照片。导出包始终包含最新版及完整历史。</p></>}
-            {tab === "explain" && <>{draft.explainer?.length ? draft.explainer.map((p, i) => <article className="studio-scene" key={i}><h3>{i + 1} · {p.heading}</h3><p>{p.body}</p><small>依据：{p.claim_ids.join("、")}</small></article>) : <p>这是旧版本，尚未保存详细讲解。使用下方“从原始资料重新组织整篇表达”可生成新版，保留旧稿。</p>}
+            {tab === "explain" && <>{draft.explainer?.length ? draft.explainer.map((p, i) => <article className="studio-scene" key={i}><h3>{i + 1} · {p.heading}</h3><p>{p.body}</p><small>依据：{claimLabel(p.claim_ids)}</small></article>) : <p>这是旧版本，尚未保存详细讲解。使用下方“从原始资料重新组织整篇表达”可生成新版，保留旧稿。</p>}
               {draft.learning_check && <section className="studio-scene"><h3>想一想，你会怎么解释？</h3><p>{draft.learning_check.question}</p><details><summary>看看解释</summary><p>{draft.learning_check.answer}</p></details></section>}</>}
             {tab === "scenes" && <>
               {running && <ProductionProgress stage={activeStage || "正在继续自动制作"} events={activeMedia?.events} />}
@@ -263,17 +273,17 @@ export default function Studio() {
                 {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}
                 {selectedMedia?.human_reviews?.map((r, i) => <p className="studio-error" key={i}>人工复核仍需修改：{r.issues.join("；")}</p>)}
-                {selectedMedia && <><p role="status">{selectedMedia.stage}</p>{selectedMedia.video && <><video controls preload="metadata" src={mediaUrl(selectedMedia.video)} /><p>{selectedMedia.duration_seconds}秒 · {selectedMedia.kind}</p><a href={mediaUrl(selectedMedia.video)} download>下载MP4</a>{selectedMedia.poster && <>{" · "}<a href={mediaUrl(selectedMedia.poster)} target="_blank" rel="noreferrer">查看插画海报PNG</a></>}</>}
-                  {selectedMedia.structure_repairs?.map((repair,i)=><p key={i}>{repair.state === "applied" ? "已自动修复卡通规划结构，原脚本未改动。" : repair.state === "failed" ? "卡通规划自动修复后仍不符合结构，已停止收费步骤。" : "正在修复卡通规划结构…"}</p>)}
-                  {Boolean(selectedMedia.mechanical_repairs?.length) && <details><summary>程序兼容处理（{selectedMedia.mechanical_repairs!.length}处，未改科学文字）</summary>{selectedMedia.mechanical_repairs!.map((r,i)=><p key={i}>{r.field}：{r.before} → {r.after}；{r.reason}</p>)}</details>}
-                  {selectedMedia.state === "failed" && Boolean(selectedMedia.failure_details?.length) && <details><summary>查看可处理的结构错误</summary>{selectedMedia.failure_details!.map((e,i)=><p key={i}>{e.field} · {e.type}</p>)}</details>}
-                  <details><summary>查看画面检查与自动修改痕迹</summary>{selectedMedia.render_revisions?.map((r,i)=><p key={i}>程序画面修正（非AI改写）：{r.reason} <a href={mediaUrl(r.previous_video)} target="_blank" rel="noreferrer">修改前视频</a></p>)}{selectedMedia.scenes.map(s => <article key={s.scene_id}><strong>{s.scene_id}</strong>{s.candidates.map((c, i) => {
+                {selectedMedia && <><p role="status">{selectedMedia.stage}</p>{selectedMedia.video && <><video controls preload="metadata" src={mediaUrl(selectedMedia.video)} /><p>{selectedMedia.duration_seconds}秒 · {selectedMedia.kind}</p><div className="studio-downloads"><a className="studio-download" href={mediaUrl(selectedMedia.video)} download>下载MP4</a>{selectedMedia.poster && <a href={mediaUrl(selectedMedia.poster)} target="_blank" rel="noreferrer">查看插画海报PNG</a>}</div></>}</>}
+                  {selectedMedia?.structure_repairs?.map((repair,i)=><p key={i}>{repair.state === "applied" ? "已自动修复卡通规划结构，原脚本未改动。" : repair.state === "failed" ? "卡通规划自动修复后仍不符合结构，已停止收费步骤。" : "正在修复卡通规划结构…"}</p>)}
+                  {Boolean(selectedMedia?.mechanical_repairs?.length) && <details><summary>程序兼容处理（{selectedMedia!.mechanical_repairs!.length}处，未改科学文字）</summary>{selectedMedia!.mechanical_repairs!.map((r,i)=><p key={i}>{r.field}：{r.before} → {r.after}；{r.reason}</p>)}</details>}
+                  {selectedMedia?.state === "failed" && Boolean(selectedMedia?.failure_details?.length) && <details><summary>查看未通过的结构检查细节</summary>{selectedMedia!.failure_details!.map((e,i)=><p key={i}>{e.field} · {typeNames[e.type] ?? e.type}</p>)}</details>}
+                  {selectedMedia && <details><summary>查看画面检查与自动修改痕迹</summary>{selectedMedia.render_revisions?.map((r,i)=><p key={i}>程序画面修正（非AI改写）：{r.reason} <a href={mediaUrl(r.previous_video)} target="_blank" rel="noreferrer">修改前视频</a></p>)}{selectedMedia.scenes.map(s => <article key={s.scene_id}><strong>{s.scene_id}</strong>{s.candidates.map((c, i) => {
                     const changes = cartoonDiff(s.candidates[i-1]?.plan,c.plan);
                     return <div className="studio-media-candidate" key={c.file}><p>候选{c.attempt}：{s.accepted === c.file ? "采用" : "未采用"} · {c.review?.status === "pass" ? "AI检查未发现明显问题" : c.review ? "AI建议修改（可能误判）" : "待检查"} <a href={mediaUrl(c.file)} target="_blank" rel="noreferrer">查看候选</a></p>
                       {i>0 && c.plan && <details><summary>实际方案变更（{changes.length}处）</summary>{changes.map(d=><div className="studio-diff" key={d.field}><strong>{d.field}</strong><del>{d.before}</del><ins>{d.after}</ins></div>)}</details>}
                       {Boolean(c.review?.issues.length || c.correction) && <details><summary>检查意见与改图要求（不等于全部已落实）</summary>{c.review?.issues.map((issue,j)=><p key={j}>{issue}</p>)}{c.correction && <p>传入的修改要求：{c.correction}</p>}</details>}
                     </div>;
-                  })}</article>)}</details></>}
+                  })}</article>)}</details>}
               </section>
               <details className="studio-script-details"><summary>查看分镜与讲解脚本（{draft.scenes.length}镜，可选）</summary>
               <p className="studio-hint">共{draft.scenes.length}镜 · 估算约{draft.scenes.reduce((total, s) => total + Math.max(6, Math.ceil(s.narration.length / 3.5)), 0)}秒；时长按旁白估算，尚非实际配音时长。</p>
@@ -284,14 +294,14 @@ export default function Studio() {
                 <p className="studio-hint">{draft.scenes[sceneIndex]?.visual_action}</p>
                 <div className="studio-player"><button onClick={() => { if (!playing && sceneIndex === draft.scenes.length - 1) setSceneIndex(0); setPlaying(!playing); }}>{playing ? "暂停" : "预演分镜"}</button><span>{sceneIndex + 1} / {draft.scenes.length}</span></div>
               </div>
-              {draft.scenes.map((s, i) => <article className="studio-scene" key={s.scene_id}><small>{roleNames[s.role ?? ""] ?? "历史分镜"}</small><button onClick={() => { setSceneIndex(i); setPlaying(false); }}>{String(i + 1).padStart(2, "0")} · {s.heading}</button><p>{s.narration}</p><small>画面：{s.visual_action}</small><small>依据：{s.claim_ids.join("、")}</small></article>)}
+              {draft.scenes.map((s, i) => <article className="studio-scene" key={s.scene_id}><small>{roleNames[s.role ?? ""] ?? "历史分镜"}</small><button onClick={() => { setSceneIndex(i); setPlaying(false); }}>{String(i + 1).padStart(2, "0")} · {s.heading}</button><p>{s.narration}</p><small>画面：{s.visual_action}</small><small>依据：{claimLabel(s.claim_ids)}</small></article>)}
               </details>
             </>}
             {tab === "evidence" && <>
               <label>查看版本<select value={version?.version} onChange={e => { setHistory(Number(e.target.value)); setSceneIndex(0); setPlaying(false); }}>{project!.versions.map(v => <option value={v.version} key={v.version}>v{v.version} · {v.review_status === "pending" ? "初稿" : "审核记录"}{v.fallback ? " · 模板降级" : ""}</option>)}</select></label>
-              {draft.claims.map(c => <article className="studio-evidence" key={c.claim_id}><h3>{c.claim_id} · {c.text}</h3><blockquote>{c.quote}</blockquote><p>适用边界：{c.boundary}</p><small>来源编号：{c.source_id} · 核对原文匹配不等于自动证实结论</small></article>)}
+              {draft.claims.map(c => <article className="studio-evidence" key={c.claim_id}><h3>事实{c.claim_id.replace(/^C/, "")} · {c.text}</h3><blockquote>{c.quote}</blockquote><p>适用边界：{c.boundary}</p><small>来源：{c.source_id} · 核对原文匹配不等于自动证实结论</small></article>)}
               {(project!.input.sources.length ? project!.input.sources : project!.research?.sources ?? []).map(s => <p key={s.source_id}>{s.source_id} · {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title} ↗</a> : s.title}</p>)}
-              <details><summary>本版模型调用记录</summary>{version!.calls.map((c, i) => <p key={i}>{c.model} · {c.purpose}<br /><small>{c.request_id}</small></p>)}</details>
+              <details><summary>本版各环节调用记录</summary>{version!.calls.map((c, i) => <p key={i}>{c.model} · {purposeLabel(c.purpose)}</p>)}</details>
             </>}
             {tab === "evidence" && <section className="studio-revisions"><h3>自动改进留下了什么？</h3>
               <p>{version!.changes.length ? `本版实际修改了 ${version!.changes.length} 处，展开查看前后对比。` : "本版没有已应用的内容修改；审核记录与内容改动分开保存。"}</p>
@@ -299,7 +309,8 @@ export default function Studio() {
               {(version!.findings ?? []).filter(f => f.severity !== "info").map((f, i) => <p key={i} className={f.severity === "blocker" ? "studio-error" : ""}>{f.target}：{f.message}</p>)}
               {Boolean(version!.findings?.some(f => f.severity === "info")) && <details><summary>复检说明（折叠）</summary>{version!.findings.filter(f => f.severity === "info").map((f, i) => <p key={i}>{f.target}：{f.message}</p>)}</details>}
               {Boolean(version?.detected_findings?.length) && <details><summary>系统发现的问题</summary>{version!.detected_findings!.map((f, i) => <p key={i}>{f.target}：{f.message}</p>)}</details>}
-              <details><summary>修改前后对比（{version!.changes.length}处）</summary>{version!.changes.map((c, i) => <div className="studio-diff" key={i}><strong>{fieldLabel(c.field)}</strong><del>{display(c.before)}</del><ins>{display(c.after)}</ins></div>)}</details>
+              <details open={version!.changes.length <= 3}><summary>修改前后对比（{version!.changes.length}处）</summary>{version!.changes.slice(0, 3).map((c, i) => <div className="studio-diff" key={i}><strong>{fieldLabel(c.field)}</strong><del>{display(c.before)}</del><ins>{display(c.after)}</ins></div>)}
+                {version!.changes.length > 3 && <details><summary>其余{version!.changes.length - 3}处（折叠）</summary>{version!.changes.slice(3).map((c, i) => <div className="studio-diff" key={i}><strong>{fieldLabel(c.field)}</strong><del>{display(c.before)}</del><ins>{display(c.after)}</ins></div>)}</details>}</details>
               {Boolean(version?.proposed_changes?.length) && <p className="studio-error">有{version!.proposed_changes!.length}处候选修改未通过检查，未覆盖原稿。</p>}
               <label>你的补充建议（选填）<textarea rows={2} value={feedback} maxLength={1000} disabled={locked} onChange={e => setFeedback(e.target.value)} placeholder="例如：第二镜太抽象，请换成日常生活中的解释，但不要改变科学含义。" /></label>
               <label className="studio-auto-source"><input type="checkbox" checked={rebuild} disabled={locked} onChange={e => setRebuild(e.target.checked)} />从原始资料重新组织整篇表达（仍保留旧版）</label>

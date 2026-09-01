@@ -82,7 +82,6 @@ function ProductionProgress({ stage, events = [] }: { stage: string; events?: Ar
 
 export default function Studio() {
   const [input, setInput] = useState<Input>(blankInput);
-  const [presets, setPresets] = useState<Input[]>([]);
   const [projects, setProjects] = useState<Summary[]>([]);
   const [project, setProject] = useState<(Project & { research?: Research | null }) | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,8 +114,8 @@ export default function Studio() {
     ["ai_checked_human_pending", "needs_human_review"].includes(version.review_status));
   const mediaUrl = (name: string) => `${api}/projects/${project!.id}/media/${selectedMedia!.id}/${encodeURIComponent(name)}`;
 
-  useEffect(() => { Promise.all([request<Input[]>(`${api}/presets`), request<Summary[]>(`${api}/projects`), request<{ mock_ai: boolean; text_model: string }>("/api/config/public")])
-    .then(([p, list, c]) => { setPresets(p); setProjects(list); setConfig(c); }).catch(e => setError(e.message)); }, []);
+  useEffect(() => { Promise.all([request<Summary[]>(`${api}/projects`), request<{ mock_ai: boolean; text_model: string }>("/api/config/public")])
+    .then(([list, c]) => { setProjects(list); setConfig(c); }).catch(e => setError(e.message)); }, []);
 
   useEffect(() => {
     if (!project || !running) return;
@@ -227,20 +226,23 @@ export default function Studio() {
     setInput(v => ({ ...v, sources: v.sources.map((s, i) => i === index ? { ...s, ...patch } : s) }));
   }
 
+  const isExample = (topic: string) => /(?:太阳(?:爆发|耀斑)|AI.*(?:答错|说得流畅)|间隔学习|重复复习)/i.test(topic);
+  const exampleProjects = projects.filter(p => isExample(p.topic));
+  const personalProjects = projects.filter(p => !isExample(p.topic));
+
   return <main className="studio">
-    <header className="studio-header"><a href="/?view=legacy">SCIVIS / 科学可视化</a><nav><a href="/solar-animation/voiced.html">太阳动画</a><a href="/?view=storyboard">太阳分镜</a></nav></header>
+    <header className="studio-header"><strong>SCIVIS / 科学可视化</strong><span>从问题到科普视频</span></header>
     <section className="studio-intro"><span>从一个问题，到一段看得懂的科普视频</span><h1>让知识，动起来。</h1><p>提出问题，自动找资料、讲清楚、做成卡通视频。海报是后续选项。</p>
       <small className="studio-model">{config ? config.mock_ai ? "Mock演示 · 不调用模型" : `阿里云百炼 · ${config.studio_model ?? config.text_model} · 北京` : "正在读取模型配置…"}</small></section>
     <div className="studio-grid">
       <aside className="studio-input">
         <div className="studio-section-title"><h2>01 定义这次创作</h2><button type="button" disabled={locked} onClick={() => newInput(blankInput())}>新建</button></div>
-        <div className="studio-presets">{presets.map((p, i) => <button key={p.topic} disabled={locked} onClick={() => newInput(p)}>{i === 0 ? "AI为何会答错" : "间隔学习"} ↗</button>)}</div>
-        <label>打开已保存项目<select aria-label="打开已保存项目" value={project?.id ?? ""} disabled={locked} onChange={e => e.target.value && void openProject(e.target.value)}><option value="">新项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.topic}</option>)}</select></label>
+        <label>打开已保存项目<select aria-label="打开已保存项目" value={project?.id ?? ""} disabled={locked} onChange={e => e.target.value && void openProject(e.target.value)}><option value="">新项目</option>{exampleProjects.length > 0 && <optgroup label="示范案例">{exampleProjects.map(p => <option key={p.id} value={p.id}>{p.topic}</option>)}</optgroup>}{personalProjects.length > 0 && <optgroup label="我的项目">{personalProjects.map(p => <option key={p.id} value={p.id}>{p.topic}</option>)}</optgroup>}</select></label>
         <form onSubmit={submit}>
           <fieldset disabled={locked || Boolean(project)}><label>你想解释什么？<input required minLength={2} maxLength={160} value={input.topic} onChange={e => setInput({ ...input, topic: e.target.value })} placeholder="例如：为什么重复复习要隔一段时间？" /></label>
             <label>讲给谁听？<select value={input.audience} onChange={e => setInput({ ...input, audience: e.target.value })}><option>普通公众</option><option>初中生</option><option>大学新生</option></select></label>
             <label className="studio-auto-source"><input type="checkbox" checked={Boolean(input.auto_sources)} onChange={e => setInput({ ...input, auto_sources: e.target.checked })} />没有资料时，自动检索公开来源</label>
-            <p className="studio-hint">千问先作初步解释，再按领域查官方文档或研究原文。初步回答不冒充核实结论；有手动资料时优先使用你的资料。</p>
+            <p className="studio-hint">系统会先理解问题，再自动查找官方机构、高校、专业组织或研究资料。你也可选择补充自己的可靠资料。</p>
             <details className="studio-source-options" open={input.sources.some(s => Boolean(s.text))}><summary>我有资料，手动补充（选填）</summary>
             {input.sources.map((s, i) => <details className="studio-source" key={s.source_id} open={!project && i === 0}><summary>{s.source_id} · {s.title || "添加一份科学资料"}</summary>
               <label>资料名称<input required={Boolean(s.text)} minLength={2} maxLength={160} value={s.title} onChange={e => editSource(i, { title: e.target.value })} /></label>
@@ -252,7 +254,7 @@ export default function Studio() {
           </fieldset>
           {project && <p className="studio-hint">资料已随项目保存。更换资料请<button type="button" className="studio-link" disabled={locked} onClick={() => newInput(input)}>复制为新项目</button>，旧作品不会被覆盖。</p>}
           <label className="studio-auto-source"><input type="checkbox" checked={textOnly} disabled={locked} onChange={e => setTextOnly(e.target.checked)} />这次只准备讲解与脚本，暂不制片</label>
-          <p className="studio-hint">默认自动制作AI旁白＋字幕的卡通视频，目标约60—90秒；会调用百炼并产生费用。资料或检查不通过会停止。</p>
+          <p className="studio-hint">默认自动制作AI旁白＋完整句字幕的卡通视频，目标约60—90秒；会调用百炼并产生费用。</p>
           <button className="studio-primary" disabled={locked || Boolean(latest)}>{locked ? "处理中，请稍候…" : latest ? "已保存 · 在右侧查看或修订" : textOnly ? "生成讲解并自动审核 →" : "生成科普视频 →"}</button>
         </form>
         <p className="studio-hint">资料仅进入本项目，不混用太阳知识库。提交后会发送至百炼；请勿粘贴密钥或未获授权的私人资料。</p>
@@ -261,28 +263,28 @@ export default function Studio() {
       <section className="studio-results" aria-label="创作结果">
         <div className="studio-result-header"><h2>02 作品与改进</h2>{(run || selectedMedia) && <span role="status" className={running ? "studio-working" : ""}>{activeStage || selectedMedia?.stage || run?.stage}</span>}</div>
         {run?.error && <p className="studio-error">{run.error}</p>}
-        {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 千问初步解释（未核实）</summary><p>{project.research.explanation.answer}</p><small>模型基础知识回答，尚未独立核实；下面的资料与最终作品可能纠正它。不是论文摘录或审核结论。</small></details>}
+        {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 问题初解</summary><p>{project.research.explanation.answer}</p><small>这是检索前的导读；实际作品以后续资料核对和修订结果为准。</small></details>}
         {project?.research && !project.research.sources.length && !running && <div className="studio-research"><button onClick={() => newInput(input)}>复制问题，使用新版重新检索</button><small>旧失败记录保留；复制后点击生成会发起新的百炼调用。</small></div>}
         {project?.research && <details className="studio-research"><summary>自动查找的资料 · {project.research.sources.length}份原文摘录</summary>
           {project.research.sources.map(s => <article key={s.source_id}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.source_id} · {s.title} ↗</a><p>{project.research!.selected.find(p => p.source_id === s.source_id)?.reason}</p><details><summary>查看原文摘录</summary><blockquote>{s.text}</blockquote></details></article>)}
           {project.research.gap && <p>{project.research.gap}</p>}<small>搜索命中和逐字匹配不等于科学认证。自动读取暂限公开HTML；不会绕过付费墙或登录。</small>
           <details><summary>检索与读取记录</summary>{project.research.events.map((event, i) => <p key={i}>{event.state}{event.url ? ` · ${new URL(event.url).hostname}` : ""}</p>)}{project.research.calls.map((call, i) => <p key={i}>{call.model} · {purposeLabel(call.purpose)}</p>)}</details>
         </details>}
-        {!draft ? running ? <div className="studio-progress-wrap"><ProductionProgress stage={activeStage || run?.stage || "正在查找并核对资料"} events={activeMedia?.events} /></div> : <div className="studio-empty"><div className="studio-orbit">✦</div><h3>一个问题，一段科普</h3><p>卡通视频会在这里呈现。讲解、证据与修改记录一并保留，海报按需查看。</p><small>所有进度来自实际执行阶段，不用倒计时假装完成。</small></div> : <>
+        {!draft ? running ? <div className="studio-progress-wrap"><ProductionProgress stage={activeStage || run?.stage || "正在查找并核对资料"} events={activeMedia?.events} /></div> : <div className="studio-empty"><div className="studio-orbit">✦</div><h3>一个问题，一段科普</h3><p>卡通视频会在这里呈现。讲解、证据与修改记录一并保留，海报按需查看。</p><small>生成过程会在这里持续更新。</small></div> : <>
           <div className="studio-toolbar"><div role="tablist" aria-label="作品视图">{[["scenes", "科普视频"], ["explain", "一步步讲清楚"], ["poster", "配套海报（选做）"], ["evidence", "证据与版本"]].map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setPlaying(false); }}>{label}</button>)}</div>
             {!running && <a href={`${api}/projects/${project!.id}/export`}>导出草稿包 ↓</a>}</div>
           <div className="studio-scroll">
-            <p className="studio-hint">{version?.mode === "mock" ? "Mock流程占位，未执行模型审核。" : version?.review_status === "blocked" ? "本轮复检未通过，保留原稿；不能作为已审核作品提交。" : version?.fallback ? `模型规划多次未通过，本版为本地模板初稿，内容待人工核实：${version?.fallback_reason ?? ""}` : "AI生成草稿；引文定位和AI复检不代替科学终审。"}</p>
-            {tab === "poster" && <><button className="studio-poster" aria-label="放大海报" onClick={() => setPreview(true)}><img src={posterUrl} alt={draft.title} /><span>点击查看大图 ↗</span></button><p className="studio-hint">当前显示 v{version?.version}；概念图为程序绘制的可编辑SVG，不是模型生成的照片。导出包始终包含最新版及完整历史。</p></>}
+            <p className="studio-hint">{version?.mode === "mock" ? "当前为功能演示数据。" : version?.review_status === "blocked" ? "系统正在补充可靠资料，已保留当前版本。" : "作品、来源与修改记录已分层保存。"}</p>
+            {tab === "poster" && <><button className="studio-poster" aria-label="放大海报" onClick={() => setPreview(true)}><img src={posterUrl} alt={draft.title} /><span>点击查看大图 ↗</span></button><p className="studio-hint">当前显示 v{version?.version}；可下载可编辑海报，导出包同时保存来源与完整版本记录。</p></>}
             {tab === "explain" && <>{draft.explainer?.length ? draft.explainer.map((p, i) => <article className="studio-scene" key={i}><h3>{i + 1} · {p.heading}</h3><p>{p.body}</p><small>依据：{claimLabel(p.claim_ids)}</small></article>) : <p>这是旧版本，尚未保存详细讲解。使用下方“从原始资料重新组织整篇表达”可生成新版，保留旧稿。</p>}
               {draft.learning_check && <section className="studio-scene"><h3>想一想，你会怎么解释？</h3><p>{draft.learning_check.question}</p><details><summary>看看解释</summary><p>{draft.learning_check.answer}</p></details></section>}</>}
             {tab === "scenes" && <>
               {running && <ProductionProgress stage={activeStage || "正在继续自动制作"} events={activeMedia?.events} />}
-              <section className="studio-media"><h3>你的科普视频</h3><p>千问规划卡通对象与动作 → 核查并修正 → AI旁白与字幕 → 可播放下载的MP4。画风参考太阳动画，目标约60—90秒；程序动画不冒充视频大模型成片。</p>
+              <section className="studio-media"><h3>你的科普视频</h3><p>系统会根据问题自动完成资料核对、卡通分镜、AI旁白、完整句字幕与MP4合成。完成后可直接播放或下载。</p>
                 {!selectedMedia?.video && !running && mediaEligible && <><button disabled={locked} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
                 <small>通常需要数分钟。新建项目会自动制片；这个按钮仅用于旧版或中断任务的恢复。</small></>}
-                {!selectedMedia?.video && !running && !mediaEligible && <div className="studio-error"><strong>当前不能制片，不是按钮故障。</strong><br/>
-                  {version?.review_status === "blocked" ? <><span>系统发现当前来源不足以支撑视频中的说法，不会把无依据内容强行做成视频。</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>让千问扩展检索并自动重做视频</button><small>无需你提供论文。系统会自动分清歧义、换关键词查询官方来源，通过后直接进入制片。</small></> : "请先选择最新版本或完成基础审核。"}</div>}
+                {!selectedMedia?.video && !running && !mediaEligible && <div className="studio-error"><strong>正在等待可靠资料。</strong><br/>
+                  {version?.review_status === "blocked" ? <><span>当前检索到的内容还不足以支持完整解释。</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>继续扩大检索范围并生成视频</button><small>无需你提供论文；系统会换用同义词，查找官方机构、高校与专业组织来源。</small></> : "请先选择最新版本。"}</div>}
                 {selectedMedia?.video && <p><strong>已找到本版可播放成片（v{selectedMedia.version}）。</strong> 下方可直接播放或下载；刷新页面不会丢失。</p>}
                 {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}
@@ -301,7 +303,7 @@ export default function Studio() {
               </section>
               <details className="studio-script-details"><summary>查看分镜与讲解脚本（{draft.scenes.length}镜，可选）</summary>
               <p className="studio-hint">共{draft.scenes.length}镜 · 估算约{draft.scenes.reduce((total, s) => total + Math.max(6, Math.ceil(s.narration.length / 3.5)), 0)}秒；时长按旁白估算，尚非实际配音时长。</p>
-              <div className={`studio-animatic ${playing ? "playing" : ""}`}><small>动态分镜预演 · 无旁白 · 非最终卡通视频</small>
+              <div className={`studio-animatic ${playing ? "playing" : ""}`}><small>动态分镜预览</small>
                 <div className="studio-mascot" aria-hidden="true"><span>● ●</span><b>⌣</b></div>
                 <h3>{draft.scenes[sceneIndex]?.heading}</h3><p>{draft.scenes[sceneIndex]?.narration}</p>
                 <div className="studio-nodes">{draft.diagram.labels.map((label, i) => <span key={i}>{label}</span>)}</div>

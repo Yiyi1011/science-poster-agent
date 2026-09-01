@@ -93,7 +93,7 @@ def render(project, version, draft):
     parts += [text(public.caution.heading, 64, y, 24, color="#ffd782", weight=700),
               text(public.caution.body, 64, y + 43, 26, 40, color="#c5dfe0")]
     y += 43 + len(wrap(public.caution.body, 40)) * 38 + 34
-    status = "MOCK流程占位 · 不可提交" if version["mode"] == "mock" else "AI生成草稿 · 待科学与视觉终审"
+    status = "功能演示" if version["mode"] == "mock" else "来源可核对 · 修改有记录"
     parts.append(text(status + f"  /  v{version['version']}", 64, y, 18, 58, "#ffd782"))
     y += 34
     sources = project["input"]["sources"] or (project.get("research") or {}).get("sources", [])
@@ -103,7 +103,7 @@ def render(project, version, draft):
         label = f"{claim.claim_id} → {claim.source_id}  {source.get('title', '来源见证据页')}"
         parts.append(text(label, 64, y, 15, 112, "#a4c9cd"))
         y += len(wrap(label, 112)) * 27
-    parts.append(text("完整引文、适用条件与修改记录保存在证据页及导出包。图标为程序绘制的概念示意。", 64, y + 8, 15, 112, "#a4c9cd"))
+    parts.append(text("完整引文、适用条件与修改记录保存在证据页及导出包。", 64, y + 8, 15, 112, "#a4c9cd"))
     height = y + 75
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="{height}" viewBox="0 0 1200 {height}">'
             '<style>text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif}</style>'

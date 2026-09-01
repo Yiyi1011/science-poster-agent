@@ -75,6 +75,45 @@ def test_explicit_quote_omission_keeps_verbatim_order():
     assert not pipeline.quote_is_locatable("短片段[…]最后一段也包含足够长的条件限定", source)
 
 
+def test_reversed_verbatim_sentences_are_restored_to_source_order():
+    source_text = "帮助学生更有效地安排学习时间。使用测验和小测找出还需要学习的内容。"
+    project = ProjectInput(topic="为什么复习要间隔一段时间", sources=[Source(source_id="S1", title="学习指南", text=source_text)])
+    draft = pipeline.mock_draft(project)
+    draft.claims[0].quote = "使用测验和小测找出还需要学习的内容。帮助学生更有效地安排学习时间。"
+    assert not pipeline.quote_is_locatable(draft.claims[0].quote, source_text)
+    changes = pipeline.repair_reordered_quote_fragments(draft, project)
+    assert len(changes) == 1
+    assert draft.claims[0].quote == "帮助学生更有效地安排学习时间。[…]使用测验和小测找出还需要学习的内容。"
+    assert pipeline.validate_evidence(draft, project) == []
+
+
+def test_reversed_english_sentences_are_restored_to_source_order():
+    source_text = "Help students allocate study time efficiently. Use tests and quizzes to identify content that needs to be learned."
+    project = ProjectInput(topic="为什么复习要间隔一段时间", sources=[Source(source_id="S1", title="Learning guide", text=source_text)])
+    draft = pipeline.mock_draft(project)
+    draft.claims[0].quote = "Use tests and quizzes to identify content that needs to be learned. Help students allocate study time efficiently."
+    changes = pipeline.repair_reordered_quote_fragments(draft, project)
+    assert len(changes) == 1
+    assert draft.claims[0].quote == "Help students allocate study time efficiently.[…]Use tests and quizzes to identify content that needs to be learned."
+    assert pipeline.validate_evidence(draft, project) == []
+
+
+@pytest.mark.parametrize("url", ["https://openstax.org/books/psychology/pages/1-introduction",
+                                  "https://www.apa.org/topics/learning-memory"])
+def test_vetted_education_and_professional_sources_are_allowed(url):
+    assert research.safe_public_url(url) == url
+
+
+def test_known_research_gap_blocks_invented_mechanism_and_schedule():
+    project = data()
+    draft = pipeline.mock_draft(project)
+    draft.scenes[0].narration = "第一天学、第三天测，第十天再看，让大脑巩固并重新提取长期记忆。"
+    findings = pipeline.validate_communication(draft, project, "当前资料未解释间隔复习为何有效的认知机制。")
+    messages = "。".join(f["message"] for f in findings)
+    assert "具体数字" in messages
+    assert "机制证据缺口" in messages
+
+
 def test_public_renderer_uses_copy_not_academic_quotes_and_escapes():
     p = data()
     draft = pipeline.mock_draft(p)

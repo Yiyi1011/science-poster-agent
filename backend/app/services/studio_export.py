@@ -24,7 +24,7 @@ def poster_svg(project, version=None):
     if draft.public_poster is not None:
         return public_poster_svg(project, v, draft)
     mock = v["mode"] == "mock"
-    status = "MOCK · 流程占位，不可提交" if mock else "AI生成草稿 · 待科学与视觉终审"
+    status = "功能演示" if mock else "来源可核对 · 修改有记录"
     parts = [svg_text("SCIVIS / 科学可视化工作台", 64, 64, 18),
              svg_text(draft.title, 64, 140, 42, 25, "#fff7df"),
              svg_text(draft.takeaway, 64, 202, 25, 40),
@@ -86,7 +86,7 @@ def export_zip(project):
         explanation += f'<section><h2>想一想</h2><p>{escape(draft.learning_check.question)}</p><details><summary>查看解释</summary><p>{escape(draft.learning_check.answer)}</p></details></section>'
     html = ('<!doctype html><html lang="zh"><meta charset="utf-8"><title>科普作品交接</title>'
             '<style>body{font:20px/1.8 sans-serif;max-width:960px;margin:40px auto;padding:24px;background:#eef5f1;color:#12343e}img{width:100%;max-width:600px}section{background:white;padding:24px;margin:20px 0;border-radius:16px}</style>'
-            f'<h1>{escape(draft.title)}</h1><p>AI生成草稿，待人工终审。本包字幕时间为估算；真实生成的插画和有声预览请从应用另行下载。</p><img src="poster.svg" alt="海报">{explanation}{sections}</html>')
+            f'<h1>{escape(draft.title)}</h1><p>作品来源、引文与修改记录已随项目保存。本包字幕时间为估算；成片请从应用下载。</p><img src="poster.svg" alt="海报">{explanation}{sections}</html>')
     files = {"poster.svg": poster_svg(project), "index.html": html,
              "project.json": json.dumps(project, ensure_ascii=False, indent=2),
              "storyboard.json": draft.model_dump_json(indent=2),

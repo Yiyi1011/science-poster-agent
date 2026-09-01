@@ -28,6 +28,8 @@ quote只截真正支持text的原句，不得截取标题或旁边无关句子�
 visual_action描述卡通镜头的角色、动作和变化，类比须注明仅为帮助理解；不用拟真神经图或无依据的统计图。
 输出严格JSON，遵循给出的JSON schema，不附解释。diagram仅是概念示意；comparison不可画成因果箭头。
 heading、title、labels保持短，claim_ids必须引用同一份draft的claims，按实际支持关系匹配而非按下标。
+若输入含research_gap，它是检索与摘录阶段确认的证据缺口，必须当作硬边界。例如research_gap说未支持认知机制，就不得写大脑巩固、遗忘曲线、重新提取等机制；
+可以改讲来源直接建议的做法、可观察现象和边界。不得加入来源没有的具体数字安排（如第1、3、10天）。
 """
 PUBLIC_PROMPT = """
 以下是所有主题共同适用的公众表达规范，不是单个案例的模板：
@@ -40,8 +42,9 @@ PUBLIC_PROMPT = """
    diagram.labels必须等于nodes的label；kind选择真正有证据支持的顺序/对比/循环，不能把概念分类画成时间或因果。
    不对比来源未介绍的对象（如只讲AI的资料不足以解释人的思维）。每个公开文案、例子、节点的claim_ids指向支持它的事实。
 6. 独立视频安排6—8镜，每镜role选择hook/example/mechanism/process/misconception/boundary/takeaway。
-   必须有hook、example、mechanism、boundary、takeaway，可用process或misconception补充；不强制加入无证据的误区。
-   旁白每镜约30—65字，最多90字。用提问→具体情境→机制分步→容易误会之处→边界→记住一句话的叙事，不能把一句话重复六遍凑数。
+   必须有hook、example、boundary、takeaway，且mechanism或process至少有一个。只有来源明确解释“为什么”时才用mechanism；
+   若来源只能支持现象、做法或定义，就用process讲清“资料能确认什么、无法确认什么”，不为凑机制或误区而添加新事实。
+   旁白每镜约30—65字，最多90字。用提问→具体情境→证据支持的过程或机制→容易误会之处→边界→记住一句话的叙事，不能把一句话重复六遍凑数。
    每镜visual_action写清角色、起始画面、动作和变化，画面服务本镜解释，不要所有镜头都换同一个背景。
 7. 资料太少支撑不了叙事时标出缺口，不添加新事实凑镜头。审核须检查所有公众文案、视觉动作及claim_ids的实质支持关系。
 8. 不让科普只剩几句口号：explainer写3—5节，每节80—150字（最多220），分别讲是什么、怎样运作、日常例子及类比局限、适用边界；用因为什么→所以怎样串起来，不写论文摘要。
@@ -91,6 +94,36 @@ def quote_is_locatable(quote, source_text):
     return True
 
 
+def repair_reordered_quote_fragments(draft: StudioDraft, project: ProjectInput):
+    """Restore source order only when every quote fragment is already verbatim."""
+    sources = {source.source_id: source for source in project.sources}
+    changes = []
+    for claim in draft.claims:
+        source = sources.get(claim.source_id)
+        if source is None or quote_is_locatable(claim.quote, source.text):
+            continue
+        fragments = [part.strip() for part in re.split(r"(?:\[\s*[…\.]+\s*\]|…{1,}|\.{3,}|(?<=[。！？!?])|(?<=\.)(?=\s+[A-Z]))", claim.quote)
+                     if len(part.strip()) >= 12]
+        if len(fragments) < 2:
+            continue
+        positioned = []
+        for fragment in fragments:
+            position = normalized(source.text).find(normalized(fragment))
+            if position < 0:
+                positioned = []
+                break
+            positioned.append((position, fragment))
+        if not positioned or len({position for position, _ in positioned}) != len(positioned):
+            continue
+        repaired = "[…]".join(fragment for _, fragment in sorted(positioned))
+        if repaired != claim.quote and quote_is_locatable(repaired, source.text):
+            changes.append({"field": f"claims.{claim.claim_id}.quote", "before": claim.quote, "after": repaired,
+                            "actor": "program_quote_order_repair",
+                            "reason": "引文片段均能逐字定位，已按来源正文顺序还原；未改写原文"})
+            claim.quote = repaired
+    return changes
+
+
 def validate_evidence(draft: StudioDraft, project: ProjectInput) -> list[dict]:
     sources = {s.source_id: s for s in project.sources}
     problems = []
@@ -118,7 +151,7 @@ def validate_evidence(draft: StudioDraft, project: ProjectInput) -> list[dict]:
     return problems
 
 
-def validate_communication(draft: StudioDraft, project: ProjectInput | None = None) -> list[dict]:
+def validate_communication(draft: StudioDraft, project: ProjectInput | None = None, research_gap: str = "") -> list[dict]:
     """Editorial gates, not a scientific truth score. Never silently change model output."""
     issues = []
     def warn(target, message):
@@ -139,8 +172,8 @@ def validate_communication(draft: StudioDraft, project: ProjectInput | None = No
     if len(draft.scenes) < 6:
         warn("scenes", "目前少于6镜，请补充生活情境、机制展开和适用边界，不能重复凑数。")
     roles = {s.role for s in draft.scenes}
-    if not {"hook", "example", "mechanism", "boundary", "takeaway"}.issubset(roles):
-        warn("scenes.role", "缺少问题引入、具体情境、机制解释、边界或收束中的叙事环节。")
+    if not {"hook", "example", "boundary", "takeaway"}.issubset(roles) or not ({"mechanism", "process"} & roles):
+        warn("scenes.role", "缺少问题引入、具体情境、证据支持的过程/机制、边界或收束中的叙事环节。")
     if len({normalized(s.narration) for s in draft.scenes}) < len(draft.scenes):
         warn("scenes", "有完全重复的旁白，不能靠复制凑分镜。")
     if any(len(s.narration) > 90 for s in draft.scenes):
@@ -189,6 +222,11 @@ def validate_communication(draft: StudioDraft, project: ProjectInput | None = No
                 messages.append("来源未支持安全/权限保证或特定验证实现；不能从接口、约定等一般定义推出这些能力")
             if re.search(r"比[^，。；：]{1,16}(更|更能|更好|更强)", content) and not re.search(r"相比|优于|好于|better than|比.{1,12}更", source_text):
                 messages.append("含未提供直接比较依据的优劣表述；请仅描述来源支持的作用")
+            numbered = re.findall(r"第[一二三四五六七八九十百两\d]+(?:天|周|月)|\d+(?:\.\d+)?(?:%|天|周|月|年|次|小时|分钟|秒)", content)
+            if any(value not in source_text for value in numbered):
+                messages.append("含来源没有的具体数字、时间表或步骤；请删除数字细节或改为来源的原范围")
+            if re.search(r"机制|为何|为什么", research_gap) and re.search(r"大脑|巩固|遗忘曲线|重新提取|神经|长期记忆", content) and not re.search(r"大脑|巩固|遗忘曲线|重新提取|神经|长期记忆", source_text):
+                messages.append("检索已标明机制证据缺口，不得用模型常识补写大脑或记忆机制")
             for match in re.finditer(r"(?:没有|不具备|不懂|不能|不会|不是靠).{0,4}(?:意识|主观意图|思考|推理|理解|查证事实|事实)", content):
                 if match.group() not in source_text:
                     messages.append("从生成/统计机制推出了无依据的认知或意图断言（" + match.group() + "）；请改为资料实际说明的行为与风险")
@@ -265,6 +303,7 @@ async def execute(project_id, request):
             client = QwenClient(replace(settings, qwen_text_model=settings.qwen_studio_model,
                 qwen_input_price_per_million=settings.qwen_studio_input_price,
                 qwen_output_price_per_million=settings.qwen_studio_output_price))
+            research_gap = (project.get("research") or {}).get("gap", "")
             repair_available = True
             calls = []
             mechanical_changes = []
@@ -293,6 +332,10 @@ async def execute(project_id, request):
                         node["icon"] = "question"
             async def checked(prompt, payload, purpose, contract):
                 nonlocal repair_available
+                def incomplete_review(error):
+                    fields = "、".join(".".join(map(str, item["loc"])) for item in error.errors(include_input=False)[:4])
+                    return Review(findings=[Finding(target="model_output", severity="warning",
+                        message=f"本轮修订结构不完整（{fields}），已忽略该候选并进入下一轮；未覆盖上一版。")], revised=None)
                 # Storage accepts old 3-scene records; newly generated/revised output must contain 6–8 scenes.
                 schema = payload.get("schema", {})
                 for definition in [schema, *schema.get("$defs", {}).values()]:
@@ -306,6 +349,8 @@ async def execute(project_id, request):
                     result = contract.model_validate(raw)
                 except ValidationError as error:
                     if not repair_available:
+                        if contract is Review:
+                            return incomplete_review(error)
                         raise
                     repair_available = False
                     store.stage(request_id, "修复模型输出结构（本次任务最多一次）")
@@ -322,6 +367,8 @@ async def execute(project_id, request):
                     try:
                         result = contract.model_validate(raw)
                     except ValidationError as error:
+                        if contract is Review:
+                            return incomplete_review(error)
                         if contract is not StudioDraft:
                             raise
                         return use_deterministic_fallback(error, "结构修复")
@@ -340,6 +387,7 @@ async def execute(project_id, request):
                         store.append_research(project_id, snapshot)
                 if snapshot.get("sources"):
                     data = ProjectInput.model_validate(dict(project["input"], sources=snapshot["sources"]))
+                    research_gap = snapshot.get("gap", "")
                 else:
                     store.stage(request_id, "自动换词检索后仍无法可靠核实", "blocked",
                                 snapshot.get("gap") or "系统暂时无法从可读的权威网页核实该问题。")
@@ -359,7 +407,9 @@ async def execute(project_id, request):
                 if request.rebuild:
                     store.stage(request_id, "从原始证据重新组织公众表达（旧版本保留）")
                     candidate = await checked(GEN_PROMPT, {"project": data.model_dump(),
-                        "feedback": request.feedback, "schema": StudioDraft.model_json_schema()}, "studio_rebuild", StudioDraft)
+                        "feedback": request.feedback, "research_gap": research_gap,
+                        "schema": StudioDraft.model_json_schema()}, "studio_rebuild", StudioDraft)
+                    mechanical_changes.extend(repair_reordered_quote_fragments(candidate, data))
                     structural = validate_evidence(candidate, data)
                     if structural:
                         store.append_version(project_id, dict(base, draft=draft.model_dump(), changes=[],
@@ -368,7 +418,7 @@ async def execute(project_id, request):
                         store.stage(request_id, "重写稿引文未通过，保留旧版本", "blocked")
                         return
                     store.append_version(project_id, dict(base, draft=candidate.model_dump(),
-                        changes=diff_fields(draft.model_dump(), candidate.model_dump()), findings=validate_communication(candidate, data),
+                        changes=diff_fields(draft.model_dump(), candidate.model_dump()), findings=validate_communication(candidate, data, research_gap),
                         mechanical_changes=list(mechanical_changes), calls=calls,
                         fallback=bool(fallback_notes), fallback_reason="；".join(fallback_notes)))
                     draft = candidate
@@ -377,7 +427,9 @@ async def execute(project_id, request):
                 if settings.mock_ai:
                     draft = mock_draft(data)
                 else:
-                    draft = await checked(GEN_PROMPT, {"project": data.model_dump(), "schema": StudioDraft.model_json_schema()}, "studio_generate", StudioDraft)
+                    draft = await checked(GEN_PROMPT, {"project": data.model_dump(), "research_gap": research_gap,
+                        "schema": StudioDraft.model_json_schema()}, "studio_generate", StudioDraft)
+                    mechanical_changes.extend(repair_reordered_quote_fragments(draft, data))
                 store.append_version(project_id, dict(base, draft=draft.model_dump(), changes=[], findings=validate_evidence(draft, data),
                     mechanical_changes=list(mechanical_changes), calls=list(calls),
                     fallback=bool(fallback_notes), fallback_reason="；".join(fallback_notes)))
@@ -387,13 +439,15 @@ async def execute(project_id, request):
                 return
             previous_findings = project["versions"][-1].get("findings", []) if project["versions"] else []
             working_draft = draft
+            accepted_in_run = False
             for iteration in range(1, 3):
                 store.stage(request_id, f"千问审核并自动修订（第{iteration}轮，最多2轮）")
                 calls = []
                 mechanical_changes = []
                 review = await checked(REVIEW_PROMPT, {"project": data.model_dump(), "draft": working_draft.model_dump(),
                     "feedback": request.feedback, "previous_findings": previous_findings,
-                    "structural_findings": validate_evidence(working_draft, data), "communication_findings": validate_communication(working_draft, data),
+                    "research_gap": research_gap, "structural_findings": validate_evidence(working_draft, data),
+                    "communication_findings": validate_communication(working_draft, data, research_gap),
                     "schema": Review.model_json_schema()}, "studio_review_rewrite", Review)
                 if review.revised is None and review.findings and not validate_evidence(working_draft, data):
                     # Some models correctly enumerate repairable issues but omit the actual
@@ -403,12 +457,13 @@ async def execute(project_id, request):
                     review = await checked(FORCED_REWRITE_PROMPT, {
                         "project": data.model_dump(), "draft": working_draft.model_dump(),
                         "repair_instructions": [finding.model_dump() for finding in review.findings],
-                        "feedback": request.feedback, "schema": Review.model_json_schema()},
+                        "feedback": request.feedback, "research_gap": research_gap, "schema": Review.model_json_schema()},
                         "studio_review_forced_rewrite", Review)
                 candidate = (review.revised or working_draft).model_copy(deep=True)
+                mechanical_changes.extend(repair_reordered_quote_fragments(candidate, data))
                 mechanical_changes.extend(synchronize_display_labels(candidate))
                 structural = validate_evidence(candidate, data)
-                final_findings = list(structural) + validate_communication(candidate, data)
+                final_findings = list(structural) + validate_communication(candidate, data, research_gap)
                 # Recheck an actual revision.  If Qwen has only repeated its
                 # critique and still omitted `revised`, another recheck adds a
                 # paid call without creating a new candidate; retain the
@@ -416,7 +471,7 @@ async def execute(project_id, request):
                 if not structural and (review.revised is not None or not review.findings):
                     store.stage(request_id, f"复检修订稿与证据边界（第{iteration}轮）")
                     recheck = await checked(RECHECK_PROMPT, {"project": data.model_dump(), "draft": candidate.model_dump(),
-                        "schema": Review.model_json_schema()}, "studio_recheck", Review)
+                        "research_gap": research_gap, "schema": Review.model_json_schema()}, "studio_recheck", Review)
                     final_findings += [f.model_dump() for f in recheck.findings]
                 if review.revised is None:
                     final_findings += [f.model_dump() for f in review.findings]
@@ -430,20 +485,31 @@ async def execute(project_id, request):
                     proposed_changes=changes if blocked else [], findings=final_findings, iteration=iteration,
                     detected_findings=[f.model_dump() for f in review.findings], calls=calls, review_status=review_status,
                     mechanical_changes=list(mechanical_changes)))
+                if review_status != "blocked":
+                    accepted_in_run = True
                 draft = output
                 # Retry the rejected candidate with its actual findings, but never publish it.
                 working_draft = candidate
                 previous_findings = final_findings
                 if structural or not needs_attention:
                     break
-            # Warnings remain visible for human final review, but only evidence/science
-            # blockers stop the default video pipeline.  This keeps the one-click promise
-            # consistent with reserve_media(), which already permits warning-only drafts.
-            store.stage(request_id,
-                        "需要补充证据；未进入制片" if blocked else
-                        "审核完成，带人工终审提醒；继续自动制片" if needs_attention else
-                        "审核完成；关键修改已留档",
-                        "blocked" if blocked else "succeeded")
+            # A rejected final revision keeps the previously accepted draft. If an earlier
+            # round of this run already passed without blockers, do not strand the whole
+            # run on the rejected revision: proceed with the accepted draft and record the
+            # rejection. Nothing unverified is published — the rejected candidate never is.
+            if blocked and accepted_in_run:
+                blocked = False
+                needs_attention = True
+                store.stage(request_id, "最后一轮修订未通过，沿用本轮已审核通过的版本继续制作", "succeeded")
+            else:
+                # Warnings remain visible for human final review, but only evidence/science
+                # blockers stop the default video pipeline.  This keeps the one-click promise
+                # consistent with reserve_media(), which already permits warning-only drafts.
+                store.stage(request_id,
+                            "正在补充可靠资料" if blocked else
+                            "内容整理完成，继续制作视频" if needs_attention else
+                            "内容核对完成，继续制作视频",
+                            "blocked" if blocked else "succeeded")
     except asyncio.CancelledError:
         store.stage(request_id, "操作中断", "failed", "操作中断，已有版本保留；重新运行前请检查。")
         raise

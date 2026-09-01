@@ -113,7 +113,7 @@ def test_mock_is_explicit_and_exports_escape_html():
         assert "poster.svg" in archive.namelist()
         assert ".env" not in archive.namelist()
         assert "<script>" not in archive.read("index.html").decode()
-        assert "MOCK" in archive.read("poster.svg").decode()
+        assert "功能演示" in archive.read("poster.svg").decode()
 
 
 def test_automatic_rewrite_is_applied_and_rechecked():
@@ -211,6 +211,33 @@ def test_failure_preserves_initial_version_and_sanitizes_error():
     assert "private provider" not in json.dumps(result)
 
 
+def test_invalid_review_candidate_is_ignored_and_second_round_can_recover():
+    source = data()
+    project = store.create_project(source)
+    old = pipeline.mock_draft(source).model_dump()
+    old["scenes"][0]["narration"] = "第一天学、第三天测，第十天再看，让大脑巩固长期记忆。"
+    store.append_version(project["id"], {"mode": "bailian", "draft": old, "review_status": "blocked"})
+    invalid = json.loads(json.dumps(old))
+    invalid["explainer"] = [{"heading": "结构不完整", "body": "太短了", "claim_ids": ["C1"]}]
+    repaired = json.loads(json.dumps(old))
+    repaired["scenes"][0]["narration"] = "先根据资料说清能确认的做法，来源没有解释的机制不作结论。"
+    responses = [
+        {"findings": [], "revised": invalid},
+        {"findings": [], "revised": invalid},
+        {"findings": [], "revised": repaired},
+        {"findings": [], "revised": None},
+    ]
+    async def model(*args): return responses.pop(0), {"purpose": args[-1]}
+    request = run_input(1)
+    store.reserve(project["id"], request)
+    with patch.object(pipeline, "settings", replace(settings, mock_ai=False)), patch.object(pipeline.QwenClient, "studio_json", side_effect=model):
+        asyncio.run(pipeline.execute(project["id"], request))
+    result = store.get_project(project["id"])
+    assert result["runs"][-1]["state"] == "succeeded"
+    assert result["versions"][-1]["draft"]["scenes"][0]["narration"] == repaired["scenes"][0]["narration"]
+    assert not responses
+
+
 @pytest.mark.parametrize("url", ["http://example.com", "https://user:password@example.com", "https://example.com/?signature=x", "javascript:alert(1)"])
 def test_source_urls_reject_credentials_or_active_content(url):
     with pytest.raises(ValidationError): Source(source_id="S1", title="资料", text="这是长度足够用于测试的一段资料文本，不含任何科学论断。", url=url)
@@ -248,3 +275,57 @@ def test_restart_recovers_interrupted_state_without_touching_versions():
     result = store.get_project(p["id"])
     assert result["runs"][0]["state"] == "failed"
     assert len(result["versions"]) == 1
+
+
+def test_rejected_final_revision_falls_back_to_accepted_version_without_blocking():
+    source = data()
+    project = store.create_project(source)
+    base = pipeline.mock_draft(source).model_dump()
+    clean = json.loads(json.dumps(base))
+    clean["scenes"][0]["narration"] = "按资料说明的做法复习：把关键内容安排在初次学习后隔一段时间再回顾。"
+    clean["scenes"][1]["narration"] = clean["scenes"][0]["narration"]  # duplicate keeps a warning so round 2 runs
+    bad = json.loads(json.dumps(base))
+    bad["scenes"][0]["narration"] = "第一天学、第三天测，第十天再看，让大脑巩固长期记忆。"
+    store.append_version(project["id"], {"mode": "bailian", "draft": base, "review_status": "pending"})
+    responses = [
+        {"findings": [], "revised": clean},   # round 1 revision accepted
+        {"findings": [], "revised": None},    # round 1 recheck
+        {"findings": [], "revised": bad},     # round 2 revision reintroduces blocker
+        {"findings": [], "revised": None},    # round 2 recheck
+    ]
+    async def model(*args): return responses.pop(0), {"purpose": args[-1]}
+    request = run_input(1)
+    store.reserve(project["id"], request)
+    with patch.object(pipeline, "settings", replace(settings, mock_ai=False)), patch.object(pipeline.QwenClient, "studio_json", side_effect=model):
+        asyncio.run(pipeline.execute(project["id"], request))
+    result = store.get_project(project["id"])
+    assert result["runs"][-1]["state"] == "succeeded"
+    assert "沿用本轮已审核通过的版本" in result["runs"][-1]["stage"]
+    latest = result["versions"][-1]
+    assert latest["review_status"] == "blocked"  # rejection is recorded, nothing overwritten
+    assert latest["draft"]["scenes"][0]["narration"] == clean["scenes"][0]["narration"]
+    assert any(f["severity"] == "blocker" for f in latest["findings"])
+    assert not responses
+
+
+def test_blocked_first_round_still_blocks_run_when_no_accepted_version_exists():
+    source = data()
+    project = store.create_project(source)
+    base = pipeline.mock_draft(source).model_dump()
+    bad = json.loads(json.dumps(base))
+    bad["scenes"][0]["narration"] = "第一天学、第三天测，第十天再看，让大脑巩固长期记忆。"
+    store.append_version(project["id"], {"mode": "bailian", "draft": base, "review_status": "pending"})
+    responses = [
+        {"findings": [], "revised": bad},     # round 1 revision has blocker
+        {"findings": [], "revised": None},    # round 1 recheck
+        {"findings": [], "revised": bad},     # round 2 still bad
+        {"findings": [], "revised": None},    # round 2 recheck
+    ]
+    async def model(*args): return responses.pop(0), {"purpose": args[-1]}
+    request = run_input(1)
+    store.reserve(project["id"], request)
+    with patch.object(pipeline, "settings", replace(settings, mock_ai=False)), patch.object(pipeline.QwenClient, "studio_json", side_effect=model):
+        asyncio.run(pipeline.execute(project["id"], request))
+    result = store.get_project(project["id"])
+    assert result["runs"][-1]["state"] == "blocked"
+    assert result["runs"][-1]["stage"] == "正在补充可靠资料"

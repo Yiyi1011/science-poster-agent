@@ -191,7 +191,7 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, plannin
                 draw = ImageDraw.Draw(canvas)
                 if not cartoon_plans:
                     draw.text((44, 18), f"{scene_index + 1:02}  {draft.scenes[scene_index].heading}", font=title_font, fill="#ffda83")
-                    draw.text((44, 64), "AI插画有声预览 · 概念类比 · 待终审", font=small_font, fill="#75d9c4")
+                    draw.text((44, 64), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
                 cap_start, cap_end, cap_text = captions[caption_index]
                 caption = cap_text if cap_start <= seconds < cap_end else ""
                 caption_lines = wrap_pixels(caption, subtitle_font, W - 140)
@@ -205,7 +205,7 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, plannin
                     text_y += line_height
                 draw.rectangle((0, H - 6, W * seconds / cursor, H), fill="#ffda83")
                 if cartoon_plans:
-                    draw.text((44, 689), f"{planning_label} · 程序卡通动画 · AI旁白 · 待人工终审",font=small_font,fill="#75d9c4")
+                    draw.text((44, 689), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
                 process.stdin.write(canvas.tobytes())
             process.stdin.close()
             if process.wait(timeout=60) != 0:

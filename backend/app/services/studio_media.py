@@ -217,7 +217,7 @@ async def execute_media(project_id, request):
             result = await asyncio.to_thread(compose, draft, images, audio, folder)
             job.update(result)
             job["files"].extend(["preview.mp4", "poster.png", "subtitles.srt"])
-            stage("插画海报与有声预览完成；仍待人工终审", "succeeded")
+            stage("视频制作完成，可播放下载", "succeeded")
             (folder / "manifest.json").write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
             job["files"].append("manifest.json")
             store.save_media(project_id, job)

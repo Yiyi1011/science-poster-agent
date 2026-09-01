@@ -48,7 +48,7 @@ def test_unverified_answer_survives_failed_search_without_becoming_source():
         result = asyncio.run(research.research(Client(), "未知基础问题", lambda _: None))
     assert result["explanation"]["status"] == "model_background_unverified"
     assert result["sources"] == [] and result["gap"]
-    assert len(result["calls"]) == 4  # orientation + three bounded retrieval attempts
+    assert len(result["calls"]) == 5  # orientation + four bounded retrieval attempts
 
 
 def test_technology_catalog_is_fetched_when_search_plugin_is_unavailable():
@@ -100,7 +100,7 @@ def test_filtered_results_retry_and_log_without_saving_secret_urls():
         return [{"url": "https://bad.example/?secret=abc"}], {}
     with patch.object(research, "search", side_effect=search):
         result = asyncio.run(research.research(Client(), "unknown", lambda _: None))
-    assert seen == [True, False, False]
+    assert seen == [True, False, False, False]
     assert result["events"] and "secret" not in str(result)
 
 
@@ -359,3 +359,92 @@ def test_video_captions_keep_complete_sentences_and_merge_short_tail():
         "但这只是常见组合方式，并不保证内容正确。",
     ]
     assert complete_sentence_captions("第一句话已经完整。补充说明") == ["第一句话已经完整。补充说明"]
+
+
+def test_bot_check_placeholder_is_rejected_not_treated_as_extracted():
+    assert research.looks_like_bot_check("Checking your browser - reCAPTCHA\nChecking your browser before accessing pmc.ncbi.nlm.nih.gov ...")
+    assert research.looks_like_bot_check("正在验证您的访问，请稍候。人机验证页面即将跳转。")
+    assert not research.looks_like_bot_check("这是一段正常的公开科普正文。" * 60)
+    assert not research.looks_like_bot_check(("captcha appears nowhere here but the page is long. " * 300)[:2400])
+
+
+def test_education_backstops_use_readable_entry_pages_with_real_titles():
+    urls = [entry[1] for entry in research.DOMAIN_BACKSTOPS["education"]]
+    assert "pmc.ncbi.nlm.nih.gov" not in " ".join(urls)  # reCAPTCHA-gated, rejected at fetch
+    assert any("ies.ed.gov" in u for u in urls)
+    assert any("openstax.org" in u for u in urls)
+    titles = {entry[1]: entry[2] for entry in research.DOMAIN_BACKSTOPS["education"]}
+    assert "官方概念页" not in " ".join(titles.values())  # no developer-note titles in the UI
+    assert titles["https://openstax.org/books/psychology-2e/pages/8-1-how-memory-functions"].startswith("OpenStax")
+
+
+def test_backstop_catalog_titles_reach_fetched_pages():
+    class Client:
+        def __init__(self): self.seen_pages = []
+        async def studio_json(self, *args):
+            purpose = args[-1]
+            if purpose == "studio_question_orientation":
+                return {"domain": "education", "answer": "间隔复习是教育研究建议的复习方法，需要官方资料核实后再作为作品依据。",
+                        "queries": ["间隔复习 记忆", "spacing study memory"], "preferred_sites": ["ies.ed.gov"]}, {}
+            self.seen_pages.append(args[1].get("pages", []))
+            return {"sources": [], "gap": "无可用来源"}, {}
+    async def search(*args, **kwargs): return [], {}
+    async def fetch(url):
+        return url, "This is a sufficiently long public page body about spaced practice and memory traces. " * 30
+    client = Client()
+    with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
+        asyncio.run(research.research(client, "为什么重复复习要隔一段时间", lambda _: None))
+    pages = client.seen_pages[-1]
+    titles = [p["title"] for p in pages]
+    assert any("IES 实践指南" in t for t in titles)
+
+
+def test_mechanism_gap_triggers_second_pass_selection_and_clears_gap():
+    class Client:
+        def __init__(self): self.purposes = []
+        async def studio_json(self, *args):
+            purpose = args[-1]
+            self.purposes.append(purpose)
+            if purpose == "studio_question_orientation":
+                return {"domain": "education", "answer": "间隔复习是教育研究建议的复习方法，需要官方资料核实后再作为作品依据。",
+                        "queries": ["间隔复习 记忆", "spacing study memory"], "preferred_sites": ["ies.ed.gov"]}, {}
+            if purpose == "studio_source_selection":
+                return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"], "reason": "官方实践指南给出间隔复习建议"}],
+                        "gap": "未解释间隔复习为何有效的认知机制。"}, {}
+            return {"sources": [{"page_id": "P2", "passage_ids": ["P2-L001"], "reason": "教材解释记忆如何进入长期记忆"}], "gap": ""}, {}
+    async def search(*args, **kwargs): return [], {}
+    async def fetch(url):
+        if "ies.ed.gov" in url:
+            body = "Space learning over time. Arrange to review key elements of course content after a delay of several weeks to several months after initial presentation. " * 4
+        else:
+            body = "Active rehearsal is a way of attending to information to move it from short-term to long-term memory. Storage keeps the encoded information available for later use. " * 4
+        return url, body
+    client = Client()
+    with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
+        result = asyncio.run(research.research(client, "为什么重复复习要隔一段时间", lambda _: None))
+    assert "studio_source_selection_second_pass" in client.purposes
+    assert len(result["sources"]) == 2
+    assert any("OpenStax" in s["title"] for s in result["sources"])
+    assert result["gap"] == ""
+
+
+def test_second_pass_without_mechanism_passages_preserves_gap():
+    class Client:
+        async def studio_json(self, *args):
+            purpose = args[-1]
+            if purpose == "studio_question_orientation":
+                return {"domain": "education", "answer": "间隔复习是教育研究建议的复习方法，需要官方资料核实后再作为作品依据。",
+                        "queries": ["间隔复习 记忆", "spacing study memory"], "preferred_sites": ["ies.ed.gov"]}, {}
+            if purpose == "studio_source_selection":
+                return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"], "reason": "官方实践指南给出间隔复习建议"}],
+                        "gap": "未解释间隔复习为何有效的认知机制。"}, {}
+            return {"sources": [], "gap": "这些页面同样没有机制解释。"}, {}
+    async def search(*args, **kwargs): return [], {}
+    async def fetch(url):
+        body = "This page only repeats practical advice without explaining underlying mechanisms. " * 6
+        return url, body
+    client = Client()
+    with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
+        result = asyncio.run(research.research(client, "为什么重复复习要隔一段时间", lambda _: None))
+    assert len(result["sources"]) == 1
+    assert result["gap"].startswith("未解释间隔复习")

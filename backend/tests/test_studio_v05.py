@@ -178,8 +178,9 @@ def test_domain_backstops_are_public_https():
     from app.services.studio_research import DOMAIN_BACKSTOPS, safe_public_url
     assert DOMAIN_BACKSTOPS["science"][0][0] == "月亮"
     for domain, entries in DOMAIN_BACKSTOPS.items():
-        for term, url in entries:
+        for term, url, title in entries:
             assert term and url.startswith("https://")
+            assert title and len(title) <= 60
             assert safe_public_url(url) == url
 
 

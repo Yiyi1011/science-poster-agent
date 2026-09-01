@@ -118,6 +118,8 @@
 | [启动本地应用.cmd](../启动本地应用.cmd) / [停止本地应用.cmd](../停止本地应用.cmd) | 早期双端口开发启动/停止入口 |
 | [scripts/start-local.ps1](../scripts/start-local.ps1) / [scripts/stop-local.ps1](../scripts/stop-local.ps1) | 早期开发服务管理；接手者优先使用新版封装启动器 |
 | [scripts/package_release.py](../scripts/package_release.py) | 从已提交代码与前端构建制作本地ZIP和Git bundle |
+| [scripts/manage_project_archive.py](../scripts/manage_project_archive.py) | 可恢复地归档/恢复重复项目，并可输出清理回执；不物理删除SQLite和媒体 |
+| [scripts/refresh_media_manifest.py](../scripts/refresh_media_manifest.py) | 对既有成片重新执行独立媒体/字幕完整性检查并更新清单 |
 | [scripts/backup_private_runtime.py](../scripts/backup_private_runtime.py) | 本地备份SQLite一致快照、媒体和证据，生成SHA256清单；不含`.env`，不得公开上传 |
 | [docs/CLAUDE_DEEPSEEK_HANDOFF.md](CLAUDE_DEEPSEEK_HANDOFF.md) | Claude主开发与DeepSeek独立审查的材料清单、可复制提示词、模型/预算红线和回退步骤 |
 | [docs/NEXT_STAGE_EXECUTION_BRIEF.md](NEXT_STAGE_EXECUTION_BRIEF.md) | 下一阶段唯一任务入口；规定任意问题到视频、UI优化和封装三个里程碑，以及各模块修改与成果存放位置 |

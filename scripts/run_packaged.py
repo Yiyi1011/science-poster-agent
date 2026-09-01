@@ -14,13 +14,14 @@ from hashlib import sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 URL = "http://127.0.0.1:8000"
+APP_VERSION = "0.5.1-preview"
 
 
 def healthy():
     try:
         with urlopen(URL + "/api/health", timeout=1) as response:
             health = json.load(response)
-        if health.get("service") != "science-poster-agent" or health.get("version") != "0.4.4-preview":
+        if health.get("service") != "science-poster-agent" or health.get("version") != APP_VERSION:
             return False
         if health.get("instance") != sha256(str(ROOT).lower().encode()).hexdigest()[:16]:
             return False
@@ -28,6 +29,35 @@ def healthy():
             return isinstance(json.load(response), list)
     except (URLError, OSError, ValueError):
         return False
+
+
+def preflight() -> None:
+    """Fail before background launch with a readable, secret-free diagnosis."""
+    missing = []
+    for module in ("uvicorn", "fastapi", "PIL", "imageio_ffmpeg"):
+        try:
+            __import__(module)
+        except ImportError:
+            missing.append(module)
+    if missing:
+        raise SystemExit("Python dependencies missing: " + ", ".join(missing)
+                         + ". Install backend[video] before retrying.")
+    from imageio_ffmpeg import get_ffmpeg_exe
+    if not Path(get_ffmpeg_exe()).is_file():
+        raise SystemExit("FFmpeg runtime is unavailable; reinstall backend[video].")
+    configured_font = os.getenv("SCIVIS_FONT_PATH", "").strip()
+    fonts = [Path(configured_font)] if configured_font else []
+    fonts.extend([Path("C:/Windows/Fonts/msyh.ttc"),
+                  Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")])
+    if not any(path.is_file() for path in fonts):
+        raise SystemExit("Chinese font missing; install Microsoft YaHei/Noto CJK or set SCIVIS_FONT_PATH.")
+    sys.path.insert(0, str(ROOT / "backend"))
+    from app.config import settings
+    if not settings.mock_ai:
+        try:
+            settings.validate_for_real_ai()
+        except RuntimeError as exc:
+            raise SystemExit("Bailian configuration is incomplete: " + str(exc)) from None
 
 
 def main():
@@ -42,6 +72,7 @@ def main():
     if not (ROOT / "frontend/dist/index.html").exists():
         raise SystemExit("Frontend build missing. Run npm ci and npm run build in frontend first.")
     if not healthy():
+        preflight()
         with socket.socket() as sock:
             if sock.connect_ex(("127.0.0.1", args.port)) == 0:
                 raise SystemExit(f"Port {args.port} is occupied by an older/different service. Stop that service before retrying. No process was killed.")

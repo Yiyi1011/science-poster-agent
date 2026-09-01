@@ -8,7 +8,7 @@
 |---|---|
 | [backend/app/services/studio_media.py](../backend/app/services/studio_media.py) | 按脚本版本生成插画、视觉检查与重画、配音和媒体任务留痕 |
 | [backend/app/services/studio_video.py](../backend/app/services/studio_video.py) | 实际配音时序、停顿、字幕和卡通/插画MP4合成；卡通默认不做PNG |
-| [backend/app/services/studio_cartoon.py](../backend/app/services/studio_cartoon.py) | 千问规划对象/动作、通用卡通绘制、视觉检查与修正、同版旁白复用 |
+| [backend/app/services/studio_cartoon.py](../backend/app/services/studio_cartoon.py) | 千问规划对象/动作、非法装饰图标兼容与结构修复留痕、通用卡通绘制、视觉检查及同版旁白复用 |
 | [backend/tests/test_studio_extended.py](../backend/tests/test_studio_extended.py) | 基础问题检索、完整讲解、媒体幂等/路径/拒绝候选和本地视频回归 |
 | [scripts/verify_studio_media.py](../scripts/verify_studio_media.py) | 显式收费的单项目媒体实测脚本；不要当免费单元测试运行 |
 | [scripts/qa_studio_media.mjs](../scripts/qa_studio_media.mjs) | 只读浏览器验证视频优先、实际播放、MP4下载、修改记录和选做海报 |
@@ -23,7 +23,7 @@
 | [backend/app/studio_routes.py](../backend/app/studio_routes.py) | 项目、生成任务、版本海报和ZIP导出接口 |
 | [backend/app/studio_models.py](../backend/app/studio_models.py) | 来源、事实、公众文案、图解和分镜的数据结构与长度限制 |
 | [backend/app/services/studio_pipeline.py](../backend/app/services/studio_pipeline.py) | 通用提示词、生成/审核/自动修订/复检、语文与证据结构检查 |
-| [backend/app/services/studio_research.py](../backend/app/services/studio_research.py) | 百炼搜索、官方站点原文读取、摘录选择和来源快照 |
+| [backend/app/services/studio_research.py](../backend/app/services/studio_research.py) | 百炼搜索、搜索异常时官方概念页后备、原文段落ID选择、合规长度裁剪和来源快照 |
 | [backend/app/services/studio_store.py](../backend/app/services/studio_store.py) | SQLite项目、只追加的版本、检索快照、任务去重与恢复 |
 | [backend/app/services/public_poster.py](../backend/app/services/public_poster.py) | 新版白话海报SVG排版、图标和按词换行 |
 | [backend/app/services/studio_export.py](../backend/app/services/studio_export.py) | 兼容旧版海报，导出SVG、独立分镜、估算字幕和版本记录 |

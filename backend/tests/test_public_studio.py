@@ -132,7 +132,7 @@ def test_research_uses_only_fetched_exact_quotes_not_model_summary():
     body = "This is an original source paragraph with enough detail to support an explanation."
     class Client:
         async def studio_json(self, *args):
-            return {"sources": [{"page_id": "P1", "quotes": [body], "reason": "原文说明了该现象"}], "gap": ""}, {}
+            return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"], "reason": "原文说明了该现象"}], "gap": ""}, {}
     async def search(*args, **kwargs): return [{"url": "https://science.nasa.gov/test", "title": "Original source"}], {}
     async def fetch(*args): return "https://science.nasa.gov/test", body
     with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
@@ -144,7 +144,7 @@ def test_research_uses_only_fetched_exact_quotes_not_model_summary():
 def test_hallucinated_excerpt_not_accepted():
     class Client:
         async def studio_json(self, *args):
-            return {"sources": [{"page_id": "P1", "quotes": ["This fabricated sentence must not become scientific evidence."], "reason": "与问题有关的解释"}], "gap": ""}, {}
+            return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L999"], "reason": "与问题有关的解释"}], "gap": ""}, {}
     async def search(*args, **kwargs): return [{"url": "https://science.nasa.gov/test", "title": "Original source"}], {}
     async def fetch(*args): return "https://science.nasa.gov/test", "This is the actual page, and it says something different from the invented quotation."
     with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):

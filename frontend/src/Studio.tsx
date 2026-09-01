@@ -23,6 +23,9 @@ const cartoonDiff = (before?: CartoonPlan, after?: CartoonPlan) => {
 };
 type Media = { id: string; version: number; state: string; stage: string; video?: string; poster?: string; duration_seconds?: number; kind: string; resumed_from?: string;
   render_revisions?: Array<{reason:string;previous_video:string;video:string}>;
+  structure_repairs?: Array<{stage:string;state:string;errors?:Array<{field:string;type:string}>;final_errors?:Array<{field:string;type:string}>}>;
+  mechanical_repairs?: Array<{field:string;before:string;after:string;reason:string}>;
+  failure_details?: Array<{field:string;type:string}>;
   human_reviews?: Array<{ reviewer: string; issues: string[]; status: string }>;
   scenes: Array<{ scene_id: string; accepted: string; candidates: Array<{ file: string; attempt: number; correction: string; plan?: CartoonPlan; review?: { status: string; issues: string[] } }> }> };
 type Project = { id: string; input: Input; versions: Version[]; runs: Array<{ id: string; state: string; stage: string; error: string }>; media?: Media[] };
@@ -242,6 +245,9 @@ export default function Studio() {
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}
                 {selectedMedia?.human_reviews?.map((r, i) => <p className="studio-error" key={i}>人工复核仍需修改：{r.issues.join("；")}</p>)}
                 {selectedMedia && <><p role="status">{selectedMedia.stage}</p>{selectedMedia.video && <><video controls preload="metadata" src={mediaUrl(selectedMedia.video)} /><p>{selectedMedia.duration_seconds}秒 · {selectedMedia.kind}</p><a href={mediaUrl(selectedMedia.video)} download>下载MP4</a>{selectedMedia.poster && <>{" · "}<a href={mediaUrl(selectedMedia.poster)} target="_blank" rel="noreferrer">查看插画海报PNG</a></>}</>}
+                  {selectedMedia.structure_repairs?.map((repair,i)=><p key={i}>{repair.state === "applied" ? "已自动修复卡通规划结构，原脚本未改动。" : repair.state === "failed" ? "卡通规划自动修复后仍不符合结构，已停止收费步骤。" : "正在修复卡通规划结构…"}</p>)}
+                  {Boolean(selectedMedia.mechanical_repairs?.length) && <details><summary>程序兼容处理（{selectedMedia.mechanical_repairs!.length}处，未改科学文字）</summary>{selectedMedia.mechanical_repairs!.map((r,i)=><p key={i}>{r.field}：{r.before} → {r.after}；{r.reason}</p>)}</details>}
+                  {selectedMedia.state === "failed" && Boolean(selectedMedia.failure_details?.length) && <details><summary>查看可处理的结构错误</summary>{selectedMedia.failure_details!.map((e,i)=><p key={i}>{e.field} · {e.type}</p>)}</details>}
                   <details><summary>查看画面检查与自动修改痕迹</summary>{selectedMedia.render_revisions?.map((r,i)=><p key={i}>程序画面修正（非AI改写）：{r.reason} <a href={mediaUrl(r.previous_video)} target="_blank" rel="noreferrer">修改前视频</a></p>)}{selectedMedia.scenes.map(s => <article key={s.scene_id}><strong>{s.scene_id}</strong>{s.candidates.map((c, i) => {
                     const changes = cartoonDiff(s.candidates[i-1]?.plan,c.plan);
                     return <div className="studio-media-candidate" key={c.file}><p>候选{c.attempt}：{s.accepted === c.file ? "采用" : "未采用"} · {c.review?.status === "pass" ? "AI检查未发现明显问题" : c.review ? "AI建议修改（可能误判）" : "待检查"} <a href={mediaUrl(c.file)} target="_blank" rel="noreferrer">查看候选</a></p>

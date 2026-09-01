@@ -13,7 +13,7 @@ from functools import lru_cache
 from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from app.config import settings
 from app.models import VideoScene
@@ -40,6 +40,30 @@ class CartoonScene(StrictModel):
 
 class CartoonPlan(StrictModel):
     scenes: list[CartoonScene] = Field(min_length=3, max_length=8)
+
+
+ICONS = {"person", "phone", "server", "book", "robot", "sun", "moon", "earth", "cloud", "lamp", "particle", "question", "check", "lock"}
+
+
+def normalize_actor_icons(raw):
+    """Repair decorative icon vocabulary only; never rewrite labels, relations or claims."""
+    changes = []
+    if not isinstance(raw, dict) or not isinstance(raw.get("scenes"), list):
+        return changes
+    rules = [("robot", ("ai", "模型", "算法", "大脑", "智能")), ("person", ("人", "用户", "学生", "老师", "公众")),
+             ("phone", ("手机", "应用", "app", "客户端")), ("server", ("服务器", "系统", "平台", "后台")),
+             ("book", ("资料", "文档", "规则", "接口", "api")), ("sun", ("太阳",)), ("moon", ("月亮", "月球")),
+             ("earth", ("地球",)), ("cloud", ("云",)), ("lamp", ("灯",)), ("lock", ("安全", "权限", "锁"))]
+    for si, scene in enumerate(raw["scenes"]):
+        for ai, actor in enumerate(scene.get("actors", []) if isinstance(scene, dict) else []):
+            if not isinstance(actor, dict) or not isinstance(actor.get("icon"), str) or actor["icon"] in ICONS:
+                continue
+            value = (str(actor.get("label", "")) + str(actor.get("explanation", ""))).lower()
+            replacement = next((icon for icon,words in rules if any(word in value for word in words)), "question")
+            changes.append({"field": f"scenes.{si}.actors.{ai}.icon", "before": actor["icon"], "after": replacement,
+                            "reason": "对象库外的装饰图标替换为最接近的内置图标；不改变标签、关系或科学内容"})
+            actor["icon"] = replacement
+    return changes
 
 
 PLAN_PROMPT = """你是公众科普卡通导演，参考简洁太阳科普动画：深蓝背景、暖黄/青色卡通对象、分步动作。只返回schema JSON。
@@ -157,9 +181,29 @@ async def execute_cartoon(project_id, request):
             human_feedback=[review for m in previous for review in m.get("human_reviews",[]) if review.get("status")=="needs_changes"]
             job["human_feedback_input"]=human_feedback
             raw,receipt=await client.studio_json(PLAN_PROMPT,{"script":draft.model_dump(),"human_feedback":human_feedback,"schema":CartoonPlan.model_json_schema()},"studio_cartoon_planning")
-            plan=CartoonPlan.model_validate(raw)
+            planning_calls=[receipt]
+            job["mechanical_repairs"]=normalize_actor_icons(raw)
+            try:
+                plan=CartoonPlan.model_validate(raw)
+            except ValidationError as error:
+                details=[{"field":".".join(map(str,e["loc"])),"type":e["type"]} for e in error.errors(include_input=False)]
+                job["structure_repairs"]=[{"stage":"cartoon_plan","errors":details,"state":"requested"}]
+                store.save_media(project_id,job); stage("卡通规划结构不完整，千问修复一次（旧失败记录保留）")
+                guard_text_budget(settings)
+                raw,repaired=await client.studio_json(PLAN_PROMPT+"\n只修复errors指出的JSON字段、长度或枚举问题；返回覆盖全部原分镜的完整CartoonPlan。不得新增事实。",
+                    {"script":draft.model_dump(),"candidate":raw,"errors":details,"schema":CartoonPlan.model_json_schema()},"studio_cartoon_planning_schema_repair")
+                planning_calls.append(repaired)
+                job["mechanical_repairs"].extend(normalize_actor_icons(raw))
+                try:
+                    plan=CartoonPlan.model_validate(raw)
+                    job["structure_repairs"][-1]["state"]="applied"
+                except ValidationError as final_error:
+                    final_details=[{"field":".".join(map(str,e["loc"])),"type":e["type"]} for e in final_error.errors(include_input=False)]
+                    job["structure_repairs"][-1].update(state="failed",final_errors=final_details)
+                    store.save_media(project_id,job)
+                    raise
             if [s.scene_id for s in plan.scenes]!=[s.scene_id for s in draft.scenes]:raise ValueError("Cartoon scenes mismatch")
-            job["planning_call"]=receipt
+            job["planning_call"]=planning_calls[-1];job["planning_calls"]=planning_calls
             images,audio,adopted=[],[],[]
             # Same script voice can be reused even from an earlier illustrated attempt.
             for i,(scene,art) in enumerate(zip(draft.scenes,plan.scenes,strict=True)):
@@ -205,4 +249,6 @@ async def execute_cartoon(project_id, request):
     except asyncio.CancelledError:
         stage("任务中断，素材与调用记录保留；不自动重复收费","failed");raise
     except Exception as exc:
+        if isinstance(exc, ValidationError) and not job.get("structure_repairs"):
+            job["failure_details"]=[{"field":".".join(map(str,e["loc"])),"type":e["type"]} for e in exc.errors(include_input=False)]
         stage(f"卡通视频未完成（{type(exc).__name__}），已保存的素材保留，可检查后重试","failed")

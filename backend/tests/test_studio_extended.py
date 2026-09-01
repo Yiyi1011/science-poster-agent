@@ -51,6 +51,45 @@ def test_unverified_answer_survives_failed_search_without_becoming_source():
     assert len(result["calls"]) == 3
 
 
+def test_technology_catalog_is_fetched_when_search_plugin_is_unavailable():
+    class Client:
+        async def studio_json(self, *args):
+            if args[-1] == "studio_question_orientation":
+                return {"domain":"technology","answer":"API 是软件之间按约定请求功能或数据的接口，仍须读取官方原文后再作为作品依据。",
+                        "queries":["API 应用程序编程接口","what is API official documentation"],"preferred_sites":["developer.mozilla.org"]}, {}
+            return {"sources":[{"page_id":"P1","passage_ids":["P1-L001"],"reason":"官方术语页解释API"},
+                               {"page_id":"P2","passage_ids":["P2-L001"],"reason":"官方概念指南解释API作用"}],"gap":""}, {}
+    async def unavailable(*args, **kwargs):
+        raise research.httpx.ConnectError("search temporarily unavailable")
+    visited=[]
+    async def fetch(url):
+        visited.append(url)
+        return url, "API is a documented interface that lets software components communicate through agreed requests and responses. " * 3
+    with patch.object(research,"search",side_effect=unavailable), patch.object(research,"fetch_page",side_effect=fetch):
+        result=asyncio.run(research.research(Client(),"API是什么？",lambda _:None))
+    assert visited == [research.GLOSSARY["API"], research.CONCEPT_GUIDES["API"]]
+    assert len(result["sources"]) == 2
+    assert result["events"][0]["state"] == "搜索服务未完成"
+
+
+def test_source_selection_over_limit_keeps_verified_prefix_instead_of_dropping_source():
+    class Client:
+        async def studio_json(self,*args):
+            if args[-1]=="studio_question_orientation":
+                return {"domain":"science","answer":"这是模型生成的初步解释，只帮助理解问题方向，仍需从公开原文逐字核验后才能作为证据进入最终科普作品。",
+                        "queries":["test science concept","test science official"],"candidate_urls":["https://science.nasa.gov/test"]},{}
+            return {"sources":[{"page_id":"P1","passage_ids":["P1-L001","P1-L002","P1-L003"],"reason":"三个段落共同解释概念"}],"gap":""},{}
+    async def empty(*args,**kwargs): return [],{}
+    paragraphs=[("A"*390)+".",("B"*390)+".",("C"*390)+"."]
+    async def fetch(url): return url,"\n".join(paragraphs)
+    with patch.object(research,"search",side_effect=empty),patch.object(research,"fetch_page",side_effect=fetch):
+        result=asyncio.run(research.research(Client(),"测试科学概念",lambda _:None))
+    assert len(result["sources"])==1
+    assert result["selected"][0]["passage_ids"]==["P1-L001","P1-L002"]
+    assert len(result["sources"][0]["text"])<=900
+    assert any("自动裁剪" in event["state"] for event in result["events"])
+
+
 def test_filtered_results_retry_and_log_without_saving_secret_urls():
     class Client:
         async def studio_json(self, *args):
@@ -165,7 +204,7 @@ def test_model_suggested_url_is_only_evidence_after_fetch_and_quote_validation()
                 return {"domain": "science", "answer": "这只是模型的初步解释，并非已查证的事实，只有实际读取并校验原文后才可作为作品的依据。",
                         "queries": ["月相", "moon phases"], "preferred_sites": ["nasa.gov", "evil.test"],
                         "candidate_urls": [url, "https://bad.test/?secret=abc"]}, {}
-            return {"sources": [{"page_id": "P1", "quotes": [quote], "reason": "原文介绍月球反射阳光"}]}, {}
+            return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"], "reason": "原文介绍月球反射阳光"}]}, {}
     visited = []
     async def search(*args, **kwargs):
         assert kwargs["sites"] == ["nasa.gov"]
@@ -174,7 +213,7 @@ def test_model_suggested_url_is_only_evidence_after_fetch_and_quote_validation()
     with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
         result = asyncio.run(research.research(Client(), "月相为什么变化", lambda _: None))
     assert visited == [url]
-    assert result["sources"][0]["text"] == quote
+    assert result["sources"][0]["text"] == quote * 4
     assert result["events"][0]["discovery"] == "model_candidate_verified_by_fetch"
     assert "secret" not in str(result) and "candidate_urls" not in result["explanation"]
 
@@ -269,6 +308,18 @@ def test_cartoon_entrance_never_collides_with_labels(monkeypatch):
         {"icon":"sun","label":"角色","explanation":"保证所有文字清楚可读"} for _ in range(4)]}
     for phase in (0,.1,.2,.4,.6,.8,1): cartoon.frame(plan,phase,"入场布局回归")
     assert max(bottoms) < 413  # Label baseline starts below the largest actor extent.
+
+
+def test_unknown_cartoon_icon_is_mechanically_mapped_without_changing_meaning():
+    from app.services.studio_cartoon import normalize_actor_icons, CartoonPlan
+    raw={"scenes":[{"scene_id":f"V{i}","relationship":"reveal","caption":"模型给出流畅回答，但内容仍需要核查。","actors":[
+        {"icon":"brain","label":"AI模型","explanation":"根据输入生成回答"},{"icon":"magnifier","label":"核查者","explanation":"回到资料检查事实"}]} for i in range(1,4)]}
+    before={k:v for k,v in raw["scenes"][0].items() if k != "actors"}
+    changes=normalize_actor_icons(raw)
+    assert [a["icon"] for a in raw["scenes"][0]["actors"]] == ["robot","book"]
+    assert {k:v for k,v in raw["scenes"][0].items() if k != "actors"} == before
+    assert len(changes)==6
+    assert CartoonPlan.model_validate(raw)
 
 
 def test_cartoon_composition_has_video_and_subtitles_but_no_default_poster(tmp_path, monkeypatch):

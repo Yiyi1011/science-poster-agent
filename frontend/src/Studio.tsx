@@ -260,15 +260,16 @@ export default function Studio() {
     <div className="studio-grid">
       <aside className="studio-input">
         <div className="studio-section-title"><h2>01 定义这次创作</h2><button type="button" disabled={locked} onClick={() => newInput(blankInput())}>新建</button></div>
-        <div className="studio-section-title"><h2>已保存项目</h2>{projects.length > 0 && <small>{projects.length} 个</small>}</div>
-        <div className="studio-saved">{projects.length === 0 ? <small className="studio-hint">还没有保存的项目，先在上方提出一个问题。</small> :
-          [[caseProjects, "案例 · 已生成视频"], [questionProjects, "我的问题"]].map(([items, label]) => (items as Summary[]).length ? <section key={label as string}><h3>{label as string}<small>{(items as Summary[]).length}</small></h3>
-            {(items as Summary[]).map(p => <div className={`studio-saved-row${project?.id === p.id ? " active" : ""}`} key={p.id}>
-              <button type="button" className="studio-saved-open" title={p.topic} disabled={locked} onClick={() => void openProject(p.id)}>{p.topic}</button>
-              <button type="button" className={`studio-star${p.favorite ? " on" : ""}`} aria-label={p.favorite ? "取消收藏" : "收藏"} title={p.favorite ? "取消收藏" : "收藏"} disabled={locked} onClick={() => void toggleFavorite(p)}>★</button>
-              <button type="button" className="studio-trash" aria-label="删除项目" title="删除项目" disabled={locked} onClick={() => void removeProject(p)}>✕</button>
-            </div>)}
-          </section> : null)}</div>
+        <details className="studio-saved"><summary>打开已保存项目{projects.length > 0 ? `（${projects.length}）` : ""}</summary>
+          <div className="studio-saved-list">{projects.length === 0 ? <small className="studio-hint">还没有保存的项目，先在上方提出一个问题。</small> :
+            [[caseProjects, "案例 · 已生成视频"], [questionProjects, "我的问题"]].map(([items, label]) => (items as Summary[]).length ? <section key={label as string}><h3>{label as string}<small>{(items as Summary[]).length}</small></h3>
+              {(items as Summary[]).map(p => <div className={`studio-saved-row${project?.id === p.id ? " active" : ""}`} key={p.id}>
+                <button type="button" className="studio-saved-open" title={p.topic} disabled={locked} onClick={() => void openProject(p.id)}>{p.topic}</button>
+                <button type="button" className={`studio-star${p.favorite ? " on" : ""}`} aria-label={p.favorite ? "取消收藏" : "收藏"} title={p.favorite ? "取消收藏" : "收藏"} disabled={locked} onClick={() => void toggleFavorite(p)}>★</button>
+                <button type="button" className="studio-trash" aria-label="删除项目" title="删除项目" disabled={locked} onClick={() => void removeProject(p)}>✕</button>
+              </div>)}
+            </section> : null)}</div>
+        </details>
         <form onSubmit={submit}>
           <fieldset disabled={locked || Boolean(project)}><label>你想解释什么？<input required minLength={2} maxLength={160} value={input.topic} onChange={e => setInput({ ...input, topic: e.target.value })} placeholder="例如：为什么重复复习要隔一段时间？" /></label>
             <label>讲给谁听？<select value={input.audience} onChange={e => setInput({ ...input, audience: e.target.value })}><option>普通公众</option><option>初中生</option><option>大学新生</option></select></label>

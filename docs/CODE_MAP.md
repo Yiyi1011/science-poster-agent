@@ -116,6 +116,7 @@
 | [scripts/package_release.py](../scripts/package_release.py) | 从已提交代码与前端构建制作本地ZIP和Git bundle |
 | [scripts/backup_private_runtime.py](../scripts/backup_private_runtime.py) | 本地备份SQLite一致快照、媒体和证据，生成SHA256清单；不含`.env`，不得公开上传 |
 | [docs/CLAUDE_DEEPSEEK_HANDOFF.md](CLAUDE_DEEPSEEK_HANDOFF.md) | Claude主开发与DeepSeek独立审查的材料清单、可复制提示词、模型/预算红线和回退步骤 |
+| [docs/NEXT_STAGE_EXECUTION_BRIEF.md](NEXT_STAGE_EXECUTION_BRIEF.md) | 下一阶段唯一任务入口；规定任意问题到视频、UI优化和封装三个里程碑，以及各模块修改与成果存放位置 |
 | [scripts/audit_repository.py](../scripts/audit_repository.py) | 上传前检查敏感文件和疑似密钥，不输出密钥原文 |
 | [Dockerfile](../Dockerfile) | 容器构建定义，不代表已公网部署 |
 | [.env.example](../.env.example) | 配置示例；真实密钥只能放本机`.env` |

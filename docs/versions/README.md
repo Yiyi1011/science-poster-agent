@@ -16,6 +16,7 @@
 | [process/v0.4.2-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.2-preview) | 修复WAV异常头导致字幕首句重复；右侧显示真实制作进度并自动切换成片 | 查时间轴与制作台修复；[变更和局限](process/v0.4.2-preview.md) |
 | [process/v0.4.3-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.3-preview) | 完整句字幕与自适应换行；Claude＋DeepSeek提示词、私有数据备份和回退交接 | 查完整句字幕与交接设计；[变更和局限](process/v0.4.3-preview.md) |
 | [process/v0.4.4-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.4-preview) | 显式关闭SQLite连接，修复Windows私有数据备份临时文件占用 | 最新稳定交接点；[变更和局限](process/v0.4.4-preview.md) |
+| [process/v0.4.5-handoff](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.5-handoff) | 下一阶段唯一执行说明：任意问题到视频、UI优化、Windows封装 | Claude＋DeepSeek接手入口；[执行说明](../NEXT_STAGE_EXECUTION_BRIEF.md)，功能沿用v0.4.4 |
 
 旧标签原样保留，不移动、不重写历史。以后制作里程碑统一用 `process/v版本号-preview`；每次标签对应一个明确的Git提交，而不是把所有历史文件复制到当前目录。
 

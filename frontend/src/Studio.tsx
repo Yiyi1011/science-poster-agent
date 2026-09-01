@@ -12,7 +12,7 @@ type Finding = { target: string; severity: string; message: string };
 type Change = { field: string; before: unknown; after: unknown };
 type Version = { version: number; draft: Draft; mode: string; model: string; review_status: string; changes: Change[];
   findings: Finding[]; detected_findings?: Finding[]; proposed_changes?: Change[]; mechanical_changes?: Array<Change & { reason: string }>;
-  calls: Array<{ model: string; request_id: string; purpose: string }> };
+  calls: Array<{ model: string; request_id: string; purpose: string }>; fallback?: boolean; fallback_reason?: string };
 type CartoonPlan = { actors: Array<{ icon: string; label: string; explanation: string }>; relationship: string; caption: string };
 const cartoonDiff = (before?: CartoonPlan, after?: CartoonPlan) => {
   if (!before || !after) return [];
@@ -250,7 +250,7 @@ export default function Studio() {
           <div className="studio-toolbar"><div role="tablist" aria-label="作品视图">{[["scenes", "科普视频"], ["explain", "一步步讲清楚"], ["poster", "配套海报（选做）"], ["evidence", "证据与版本"]].map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setPlaying(false); }}>{label}</button>)}</div>
             {!running && <a href={`${api}/projects/${project!.id}/export`}>导出草稿包 ↓</a>}</div>
           <div className="studio-scroll">
-            <p className="studio-hint">{version?.mode === "mock" ? "Mock流程占位，未执行模型审核。" : version?.review_status === "blocked" ? "本轮复检未通过，保留原稿；不能作为已审核作品提交。" : "AI生成草稿；引文定位和AI复检不代替科学终审。"}</p>
+            <p className="studio-hint">{version?.mode === "mock" ? "Mock流程占位，未执行模型审核。" : version?.review_status === "blocked" ? "本轮复检未通过，保留原稿；不能作为已审核作品提交。" : version?.fallback ? `模型规划多次未通过，本版为本地模板初稿，内容待人工核实：${version?.fallback_reason ?? ""}` : "AI生成草稿；引文定位和AI复检不代替科学终审。"}</p>
             {tab === "poster" && <><button className="studio-poster" aria-label="放大海报" onClick={() => setPreview(true)}><img src={posterUrl} alt={draft.title} /><span>点击查看大图 ↗</span></button><p className="studio-hint">当前显示 v{version?.version}；概念图为程序绘制的可编辑SVG，不是模型生成的照片。导出包始终包含最新版及完整历史。</p></>}
             {tab === "explain" && <>{draft.explainer?.length ? draft.explainer.map((p, i) => <article className="studio-scene" key={i}><h3>{i + 1} · {p.heading}</h3><p>{p.body}</p><small>依据：{p.claim_ids.join("、")}</small></article>) : <p>这是旧版本，尚未保存详细讲解。使用下方“从原始资料重新组织整篇表达”可生成新版，保留旧稿。</p>}
               {draft.learning_check && <section className="studio-scene"><h3>想一想，你会怎么解释？</h3><p>{draft.learning_check.question}</p><details><summary>看看解释</summary><p>{draft.learning_check.answer}</p></details></section>}</>}
@@ -288,7 +288,7 @@ export default function Studio() {
               </details>
             </>}
             {tab === "evidence" && <>
-              <label>查看版本<select value={version?.version} onChange={e => { setHistory(Number(e.target.value)); setSceneIndex(0); setPlaying(false); }}>{project!.versions.map(v => <option value={v.version} key={v.version}>v{v.version} · {v.review_status === "pending" ? "初稿" : "审核记录"}</option>)}</select></label>
+              <label>查看版本<select value={version?.version} onChange={e => { setHistory(Number(e.target.value)); setSceneIndex(0); setPlaying(false); }}>{project!.versions.map(v => <option value={v.version} key={v.version}>v{v.version} · {v.review_status === "pending" ? "初稿" : "审核记录"}{v.fallback ? " · 模板降级" : ""}</option>)}</select></label>
               {draft.claims.map(c => <article className="studio-evidence" key={c.claim_id}><h3>{c.claim_id} · {c.text}</h3><blockquote>{c.quote}</blockquote><p>适用边界：{c.boundary}</p><small>来源编号：{c.source_id} · 核对原文匹配不等于自动证实结论</small></article>)}
               {(project!.input.sources.length ? project!.input.sources : project!.research?.sources ?? []).map(s => <p key={s.source_id}>{s.source_id} · {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title} ↗</a> : s.title}</p>)}
               <details><summary>本版模型调用记录</summary>{version!.calls.map((c, i) => <p key={i}>{c.model} · {c.purpose}<br /><small>{c.request_id}</small></p>)}</details>

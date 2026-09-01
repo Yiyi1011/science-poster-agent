@@ -7,6 +7,8 @@ import asyncio
 import math
 import re
 from dataclasses import replace
+
+import httpx
 from pydantic import ValidationError
 
 from app.config import settings
@@ -135,9 +137,22 @@ def validate_communication(draft: StudioDraft, project: ProjectInput | None = No
         warn("scenes", "有完全重复的旁白，不能靠复制凑分镜。")
     if any(len(s.narration) > 90 for s in draft.scenes):
         warn("scenes.narration", "单镜旁白过长，请拆分或简化，控制在90字以内。")
+    if sum(len(s.narration) for s in draft.scenes) < 180:
+        warn("scenes.narration", "全部旁白合计不足180字，撑不起60—90秒完整讲解；请把机制、例子和边界讲充分。")
     if draft.explainer:
         if len(draft.explainer) < 3 or len({normalized(s.body) for s in draft.explainer}) != len(draft.explainer):
             warn("explainer", "讲解至少应有三个不同环节，不要重复几句话凑篇幅。")
+        if any(len(p.body) < 60 for p in draft.explainer):
+            warn("explainer", "有讲解节过短，请把机制或例子展开写清楚。")
+        text = " ".join(p.heading + p.body for p in draft.explainer)
+        covered = 0
+        for signals in (("定义", "是什么", "概念", "本质"), ("如何", "怎样", "机制", "原理", "过程"),
+                        ("例子", "比如", "例如", "类比", "情境", "好比"), ("影响", "作用", "好处", "风险", "后果"),
+                        ("边界", "局限", "条件", "误区", "不适用", "注意")):
+            if any(word in text for word in signals):
+                covered += 1
+        if covered < 3:
+            warn("explainer", "讲解缺少“是什么/如何工作/例子或类比/影响或边界”中的多数环节，请补充完整。")
         if not draft.learning_check:
             warn("learning_check", "缺少帮助读者确认理解的小问题与解释。")
     if project:
@@ -245,6 +260,17 @@ async def execute(project_id, request):
             repair_available = True
             calls = []
             mechanical_changes = []
+            fallback_notes = []
+
+            def use_deterministic_fallback(error, step):
+                """Brief 6.4.6: never fake model planning success; keep a reviewable template draft."""
+                from app.services.studio_fallback import deterministic_fallback_draft
+                reason = f"千问规划及{step}均未通过（{type(error).__name__}），改用本地确定性6镜模板（内容待人工核实）"
+                fallback_notes.append(reason)
+                snapshot = project.get("research") or {}
+                primer_answer = (snapshot.get("explanation") or {}).get("answer", "")
+                store.stage(request_id, "模型规划未通过，保留本地模板初稿并标记待人工核实", "needs_human_review")
+                return deterministic_fallback_draft(data, primer_answer)[0]
             def normalize_icons(raw):
                 candidate = raw.get("revised") if "revised" in raw else raw
                 if not isinstance(candidate, dict):
@@ -276,11 +302,21 @@ async def execute(project_id, request):
                     repair_available = False
                     store.stage(request_id, "修复模型输出结构（本次任务最多一次）")
                     errors = [{"field": ".".join(map(str, e["loc"])), "type": e["type"]} for e in error.errors(include_input=False)]
-                    raw, receipt = await client.studio_json(BASE_PROMPT + "仅修复指出的JSON结构或长度问题，保持证据含义。禁止添加未定义字段。返回完整修复对象。",
-                        {"project": data.model_dump(), "candidate": raw, "errors": errors, "schema": contract.model_json_schema()}, purpose + "_schema_repair")
+                    try:
+                        raw, receipt = await client.studio_json(BASE_PROMPT + "仅修复指出的JSON结构或长度问题，保持证据含义。禁止添加未定义字段。返回完整修复对象。",
+                            {"project": data.model_dump(), "candidate": raw, "errors": errors, "schema": contract.model_json_schema()}, purpose + "_schema_repair")
+                    except (ValueError, httpx.HTTPError) as error:
+                        if contract is not StudioDraft:
+                            raise
+                        return use_deterministic_fallback(error, "结构修复调用")
                     calls.append(receipt)
                     normalize_icons(raw)
-                    result = contract.model_validate(raw)
+                    try:
+                        result = contract.model_validate(raw)
+                    except ValidationError as error:
+                        if contract is not StudioDraft:
+                            raise
+                        return use_deterministic_fallback(error, "结构修复")
                 changed_draft = result if isinstance(result, StudioDraft) else result.revised
                 if changed_draft is not None and purpose != "studio_recheck":
                     mechanical_changes.extend(synchronize_display_labels(changed_draft))
@@ -321,7 +357,8 @@ async def execute(project_id, request):
                         return
                     store.append_version(project_id, dict(base, draft=candidate.model_dump(),
                         changes=diff_fields(draft.model_dump(), candidate.model_dump()), findings=validate_communication(candidate, data),
-                        mechanical_changes=list(mechanical_changes), calls=calls))
+                        mechanical_changes=list(mechanical_changes), calls=calls,
+                        fallback=bool(fallback_notes), fallback_reason="；".join(fallback_notes)))
                     draft = candidate
             else:
                 store.stage(request_id, "千问编写事实与独立分镜" if not settings.mock_ai else "生成Mock占位稿")
@@ -330,7 +367,8 @@ async def execute(project_id, request):
                 else:
                     draft = await checked(GEN_PROMPT, {"project": data.model_dump(), "schema": StudioDraft.model_json_schema()}, "studio_generate", StudioDraft)
                 store.append_version(project_id, dict(base, draft=draft.model_dump(), changes=[], findings=validate_evidence(draft, data),
-                    mechanical_changes=list(mechanical_changes), calls=list(calls)))
+                    mechanical_changes=list(mechanical_changes), calls=list(calls),
+                    fallback=bool(fallback_notes), fallback_reason="；".join(fallback_notes)))
             store.stage(request_id, "逐条定位来源引文")
             if settings.mock_ai:
                 store.stage(request_id, "Mock演示完成；未执行AI审核", "succeeded")

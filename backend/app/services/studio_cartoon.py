@@ -12,6 +12,7 @@ import shutil
 from functools import lru_cache
 from typing import Literal
 
+import httpx
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import Field, ValidationError
 
@@ -23,6 +24,7 @@ from app.services.studio_pipeline import _model_lock
 from app.services.qwen_client import QwenClient
 from app.services.qwen_tts_client import QwenTtsClient
 from app.services.model_policy import guard_text_budget
+from app.services.studio_fallback import deterministic_cartoon_plan
 
 
 class Actor(StrictModel):
@@ -161,7 +163,7 @@ def frame(plan, phase, heading=""):
 
 async def execute_cartoon(project_id, request):
     from app.services.studio_media import directory, inspect_image, ROOT
-    from app.services.studio_video import compose, find_font
+    from app.services.studio_video import compose, find_font, verify_media_output
     project=store.get_project(project_id)
     job=next(m for m in project["media"] if m["id"]==str(request.request_id))
     folder=directory(project_id,job["id"])
@@ -189,19 +191,27 @@ async def execute_cartoon(project_id, request):
                 details=[{"field":".".join(map(str,e["loc"])),"type":e["type"]} for e in error.errors(include_input=False)]
                 job["structure_repairs"]=[{"stage":"cartoon_plan","errors":details,"state":"requested"}]
                 store.save_media(project_id,job); stage("卡通规划结构不完整，千问修复一次（旧失败记录保留）")
-                guard_text_budget(settings)
-                raw,repaired=await client.studio_json(PLAN_PROMPT+"\n只修复errors指出的JSON字段、长度或枚举问题；返回覆盖全部原分镜的完整CartoonPlan。不得新增事实。",
-                    {"script":draft.model_dump(),"candidate":raw,"errors":details,"schema":CartoonPlan.model_json_schema()},"studio_cartoon_planning_schema_repair")
-                planning_calls.append(repaired)
-                job["mechanical_repairs"].extend(normalize_actor_icons(raw))
                 try:
-                    plan=CartoonPlan.model_validate(raw)
-                    job["structure_repairs"][-1]["state"]="applied"
-                except ValidationError as final_error:
-                    final_details=[{"field":".".join(map(str,e["loc"])),"type":e["type"]} for e in final_error.errors(include_input=False)]
-                    job["structure_repairs"][-1].update(state="failed",final_errors=final_details)
+                    guard_text_budget(settings)
+                    raw,repaired=await client.studio_json(PLAN_PROMPT+"\n只修复errors指出的JSON字段、长度或枚举问题；返回覆盖全部原分镜的完整CartoonPlan。不得新增事实。",
+                        {"script":draft.model_dump(),"candidate":raw,"errors":details,"schema":CartoonPlan.model_json_schema()},"studio_cartoon_planning_schema_repair")
+                except (ValueError, httpx.HTTPError) as error:
+                    job["structure_repairs"][-1].update(state="failed",final_errors=[{"error":type(error).__name__}])
+                    job["planning_fallback"]="千问卡通规划修复调用未完成，改用确定性对象模板（角色与动作待人工补充）"
                     store.save_media(project_id,job)
-                    raise
+                    plan=deterministic_cartoon_plan(draft)
+                else:
+                    planning_calls.append(repaired)
+                    job["mechanical_repairs"].extend(normalize_actor_icons(raw))
+                    try:
+                        plan=CartoonPlan.model_validate(raw)
+                        job["structure_repairs"][-1]["state"]="applied"
+                    except ValidationError as final_error:
+                        final_details=[{"field":".".join(map(str,e["loc"])),"type":e["type"]} for e in final_error.errors(include_input=False)]
+                        job["structure_repairs"][-1].update(state="failed",final_errors=final_details)
+                        job["planning_fallback"]="千问卡通规划与一次结构修复均未通过，改用确定性对象模板（角色与动作待人工补充）"
+                        store.save_media(project_id,job)
+                        plan=deterministic_cartoon_plan(draft)
             if [s.scene_id for s in plan.scenes]!=[s.scene_id for s in draft.scenes]:raise ValueError("Cartoon scenes mismatch")
             job["planning_call"]=planning_calls[-1];job["planning_calls"]=planning_calls
             images,audio,adopted=[],[],[]
@@ -244,8 +254,14 @@ async def execute_cartoon(project_id, request):
             stage("合成卡通动作、AI旁白与字幕（目标60—90秒）")
             result=await asyncio.to_thread(compose,draft,images,audio,folder,cartoon_plans=adopted)
             job.update(result);job["files"].extend(["preview.mp4","subtitles.srt","manifest.json"])
-            stage("卡通科普视频已完成；请播放核查内容与听感","succeeded")
+            integrity=await asyncio.to_thread(verify_media_output,folder)
+            job["media_integrity_check"]=integrity
+            job["files"].extend(integrity.get("sample_frames",[]))
             (folder/"manifest.json").write_text(json.dumps(job,ensure_ascii=False,indent=2),encoding="utf-8")
+            if integrity["status"]!="ok":
+                stage(f"视频完整性检查未通过（{integrity.get('error','未知')}），素材保留；检查后可重试","failed")
+                return
+            stage("卡通科普视频已完成；请播放核查内容与听感","succeeded")
     except asyncio.CancelledError:
         stage("任务中断，素材与调用记录保留；不自动重复收费","failed");raise
     except Exception as exc:

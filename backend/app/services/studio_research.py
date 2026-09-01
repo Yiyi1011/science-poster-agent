@@ -36,6 +36,17 @@ GLOSSARY = {term: f"https://developer.mozilla.org/en-US/docs/Glossary/{term}"
             for term in ["API", "HTTP", "DNS", "URL", "HTML", "CSS", "JavaScript", "Cache"]}
 CONCEPT_GUIDES = {term: f"https://aws.amazon.com/what-is/{slug}/" for term, slug in
                   [("API", "api"), ("数据库", "database"), ("云计算", "cloud-computing"), ("机器学习", "machine-learning") ]}
+# Brief 6.1.5 domain backstops: official entry pages verified readable, still fetched and
+# quote-checked like any other source. Never canned answers.
+DOMAIN_BACKSTOPS = {
+    "science": [("月亮", "https://science.nasa.gov/moon/"), ("太阳", "https://science.nasa.gov/sun/"),
+                ("地球", "https://science.nasa.gov/earth/")],
+    "education": [("复习", "https://ies.ed.gov/ncee/wwc/PracticeGuide/1"),
+                  ("记忆", "https://ies.ed.gov/ncee/wwc/PracticeGuide/1")],
+    "health": [("睡眠", "https://www.who.int/health-topics/"), ("健康", "https://www.who.int/health-topics/")],
+}
+STOP_WORDS = {"我们", "这个", "一个", "什么", "问题", "就是", "可以", "没有", "因为", "所以", "如果", "它们", "他们",
+              "其中", "一些", "这样", "自己", "说明", "不同", "进行", "需要", "一般", "通常", "之后", "这里", "通过"}
 PRIMER_PROMPT = """你是公众科普老师。先理解问题，用基础知识给一份简短初步解释，再规划资料检索。
 它尚未经过外部来源核实，不要声称已查文献，answer不含URL或编造论文/数据。基础概念可用明确标注的生活类比，不强求论文。
 将领域选为technology/science/education/health/general。技术概念优先原始技术文档、标准组织和厂商官方概念说明。
@@ -71,6 +82,20 @@ class Pick(StrictModel):
 class Selection(StrictModel):
     sources: list[Pick] = Field(max_length=3)
     gap: str = Field(default="", max_length=400)
+
+
+def split_question(question):
+    """Finite conjunction split for compound questions; short standalone parts only."""
+    parts = [part.strip() for part in re.split(r"[和与及、，,;；]", question)]
+    return [part for part in parts if 2 <= len(part) <= 30 and part != question][:1]
+
+
+def expansion_query(primer, question):
+    """Third query from the primer's own vocabulary plus a domain keyword; bounded length."""
+    keywords = [word for word in re.findall(r"[一-鿿]{2,6}", primer.answer) if word not in STOP_WORDS][:3]
+    domain_terms = {"technology": "官方文档 原理", "science": "机制 原理", "education": "方法 研究",
+                    "health": "健康 研究", "general": "科普 官方"}
+    return f"{question[:120]} {' '.join(keywords)} {domain_terms[primer.domain]}"
 
 
 def safe_public_url(url):
@@ -208,9 +233,22 @@ async def research(client, question, progress):
                     if re.search(r"(?<![a-z])" + re.escape(term) + r"(?![a-z])", terms, re.I)][:1]
         catalog += [{"url": url, "title": f"{term} — AWS Concept Guide"} for term, url in CONCEPT_GUIDES.items()
                     if re.search(r"(?<![a-z])" + re.escape(term) + r"(?![a-z])", terms, re.I)][:1]
+    # Brief 6.1.5 domain backstops: match the question vocabulary, fetch and verify like any page.
+    backstop_terms = question + " " + " ".join(primer.queries)
+    catalog += [{"url": url, "title": "官方概念页（领域后备入口，必须实际读取核验）"} for term, url in DOMAIN_BACKSTOPS.get(primer.domain, [])
+                if term in backstop_terms]
     # The preliminary answer is NEVER inserted into sources or used as a fake quotation.
-    for attempt, query in enumerate(primer.queries):
-        progress("按领域查找原始资料" if not attempt else "调整关键词再次查找（最多两轮）")
+    queries = list(primer.queries)
+    # Brief 6.1.5: only when the primer's keyword list is thin, fill the search
+    # budget with question splitting and keyword expansion instead of extra paid calls.
+    if len(queries) < 2:
+        for extra in [*split_question(question), expansion_query(primer, question)]:
+            if extra and extra not in queries:
+                queries.append(extra)
+    queries = queries[:3]
+    for attempt, query in enumerate(queries):
+        progress("按领域查找原始资料" if not attempt else
+                 ("调整关键词再次查找（最多两轮）" if attempt == 1 else "按扩展关键词与领域后备页再次查找"))
         try:
             focused_query = query[:240] + (" site:" + sites[0] if attempt else "")
             results, receipt = await search(client, focused_query, restricted=not bool(attempt), sites=sites)

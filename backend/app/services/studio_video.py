@@ -209,3 +209,36 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
     return {"duration_seconds": round(cursor, 3), "resolution": [W, H], "fps": fps,
             "video": "preview.mp4", **({"poster": "poster.png"} if not cartoon_plans else {}), "subtitles": "subtitles.srt",
             "timing_note": "逐镜采用真实配音时长；完整句子保持在同一字幕块并在画面内换行，非逐字强制对齐"}
+
+
+def verify_media_output(folder, video_name="preview.mp4"):
+    """Post-compose integrity (brief 6.1.10): decode the final MP4, read duration, audio
+    track and three sample frames. Evidence lands in the job manifest, never a fake pass."""
+    import re
+    path = folder / video_name
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    probe = subprocess.run([ffmpeg, "-hide_banner", "-i", str(path)], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace",
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    info = probe.stderr
+    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", info)
+    duration = None
+    if match:
+        hours, minutes, seconds = (int(match.group(1)), int(match.group(2)), float(match.group(3)))
+        duration = round(hours * 3600 + minutes * 60 + seconds, 3)
+    has_audio = "Audio:" in info
+    frames = []
+    try:
+        for index, position in enumerate(("0.25", "0.5", "0.75"), 1):
+            frame_path = folder / f"integrity-frame-{index}.png"
+            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-ss", position,
+                            "-i", str(path), "-frames:v", "1", str(frame_path)], check=True,
+                           capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            frames.append(frame_path.name)
+    except subprocess.CalledProcessError as exc:
+        return {"status": "failed", "error": "视频解码失败", "detail": type(exc).__name__,
+                "duration_seconds": duration, "has_audio": has_audio}
+    if duration is None or not has_audio or len(frames) != 3:
+        return {"status": "failed", "error": "时长或音轨未通过", "duration_seconds": duration,
+                "has_audio": has_audio, "sample_frames": frames}
+    return {"status": "ok", "duration_seconds": duration, "has_audio": has_audio, "sample_frames": frames}

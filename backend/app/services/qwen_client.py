@@ -51,11 +51,17 @@ class QwenClient:
         choice = body["choices"][0]
         if choice.get("finish_reason") == "length":
             raise ValueError("模型输出被截断，未保存不完整作品")
-        return json.loads(choice["message"]["content"]), {
+        from app.services.studio_structured_output import hardened_json
+        try:
+            payload, hardening = hardened_json(choice["message"]["content"])
+        except (ValueError, json.JSONDecodeError) as error:
+            raise ValueError("模型返回的JSON无法安全解析，未保存不完整作品") from error
+        return payload, {
             "provider": "阿里云百炼", "model": self.settings.qwen_text_model,
             "response_model": body.get("model", ""), "region": self.settings.region,
             "request_id": body.get("id", ""), "purpose": purpose,
             "prompt_version": "studio-v1.2-public", "prompt_sha256": sha256(prompt.encode()).hexdigest(), "usage": body.get("usage", {}),
+            "json_hardening": hardening,
         }
 
     async def create_poster_plan(self, request: PosterRequest) -> dict:

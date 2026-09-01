@@ -60,6 +60,25 @@ def detail(project_id: UUID):
     return lookup(project_id)
 
 
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: UUID):
+    """软删除：项目从列表消失但数据完整保留，可恢复。"""
+    try:
+        store.archive_project(str(project_id), "用户删除")
+    except KeyError:
+        raise HTTPException(404, "项目不存在") from None
+    return {"ok": True}
+
+
+@router.post("/projects/{project_id}/favorite")
+def favorite(project_id: UUID):
+    try:
+        favorite = store.toggle_favorite(str(project_id))
+    except KeyError:
+        raise HTTPException(404, "项目不存在") from None
+    return {"favorite": favorite}
+
+
 @router.post("/projects/{project_id}/run", status_code=202)
 async def run(project_id: UUID, request: RunInput):
     try:

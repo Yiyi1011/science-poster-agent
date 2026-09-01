@@ -32,14 +32,17 @@ type Media = { id: string; version: number; state: string; stage: string; video?
 type Project = { id: string; input: Input; versions: Version[]; runs: Array<{ id: string; state: string; stage: string; error: string }>; media?: Media[] };
 type Research = { sources: Source[]; selected: Array<{ source_id: string; reason: string }>; events: Array<{ url: string; state: string }>;
   gap: string; explanation?: { answer: string; domain: string }; calls: Array<{ model: string; purpose: string; request_id: string }> };
-type Summary = { id: string; topic: string };
+type Summary = { id: string; topic: string; has_video?: boolean; favorite?: boolean };
 const blankSource = (): Source => ({ source_id: "S1", title: "", url: "", text: "" });
 const blankInput = (): Input => ({ topic: "", audience: "普通公众", sources: [blankSource()], auto_sources: true });
 const roleNames: Record<string, string> = { hook: "问题引入", example: "生活情境", mechanism: "机制解释", process: "逐步展开", misconception: "常见误会", boundary: "适用边界", takeaway: "记住要点" };
 const api = "/api/studio";
 
-async function request<T>(url: string, data?: unknown): Promise<T> {
-  const response = await fetch(url, data === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+async function request<T>(url: string, data?: unknown, method = "POST"): Promise<T> {
+  const hasBody = data !== undefined;
+  const response = await fetch(url, hasBody || method !== "POST"
+    ? { method, headers: hasBody ? { "Content-Type": "application/json" } : undefined, body: hasBody ? JSON.stringify(data) : undefined }
+    : undefined);
   const result = await response.json();
   if (!response.ok) {
     const detail = result?.detail;
@@ -228,8 +231,27 @@ export default function Studio() {
   }
 
   const isExample = (topic: string) => /(?:太阳(?:爆发|耀斑)|AI.*(?:答错|说得流畅)|间隔学习|重复复习)/i.test(topic);
-  const exampleProjects = projects.filter(p => isExample(p.topic));
-  const personalProjects = projects.filter(p => !isExample(p.topic));
+  const byOrder = (a: Summary, b: Summary) => Number(b.favorite ?? false) - Number(a.favorite ?? false);
+  const caseProjects = projects.filter(p => p.has_video || isExample(p.topic)).sort(byOrder);
+  const questionProjects = projects.filter(p => !p.has_video && !isExample(p.topic)).sort(byOrder);
+
+  async function toggleFavorite(p: Summary) {
+    setBusy(true); setError("");
+    try {
+      const { favorite } = await request<{ favorite: boolean }>(`${api}/projects/${p.id}/favorite`);
+      setProjects(prev => prev.map(x => x.id === p.id ? { ...x, favorite } : x));
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function removeProject(p: Summary) {
+    if (!window.confirm(`删除项目“${p.topic}”？删除后不再出现在列表中，数据和视频仍完整保留。`)) return;
+    setBusy(true); setError("");
+    try {
+      await request<{ ok: boolean }>(`${api}/projects/${p.id}`, undefined, "DELETE");
+      setProjects(await request<Summary[]>(`${api}/projects`));
+      if (project?.id === p.id) newInput(blankInput());
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
 
   return <main className="studio">
     <header className="studio-header"><strong>SCIVIS / 科学可视化</strong><span>从问题到科普视频</span></header>
@@ -238,7 +260,15 @@ export default function Studio() {
     <div className="studio-grid">
       <aside className="studio-input">
         <div className="studio-section-title"><h2>01 定义这次创作</h2><button type="button" disabled={locked} onClick={() => newInput(blankInput())}>新建</button></div>
-        <label>打开已保存项目<select aria-label="打开已保存项目" value={project?.id ?? ""} disabled={locked} onChange={e => e.target.value && void openProject(e.target.value)}><option value="">新项目</option>{exampleProjects.length > 0 && <optgroup label="示范案例">{exampleProjects.map(p => <option key={p.id} value={p.id}>{p.topic}</option>)}</optgroup>}{personalProjects.length > 0 && <optgroup label="我的项目">{personalProjects.map(p => <option key={p.id} value={p.id}>{p.topic}</option>)}</optgroup>}</select></label>
+        <div className="studio-section-title"><h2>已保存项目</h2>{projects.length > 0 && <small>{projects.length} 个</small>}</div>
+        <div className="studio-saved">{projects.length === 0 ? <small className="studio-hint">还没有保存的项目，先在上方提出一个问题。</small> :
+          [[caseProjects, "案例 · 已生成视频"], [questionProjects, "我的问题"]].map(([items, label]) => (items as Summary[]).length ? <section key={label as string}><h3>{label as string}<small>{(items as Summary[]).length}</small></h3>
+            {(items as Summary[]).map(p => <div className={`studio-saved-row${project?.id === p.id ? " active" : ""}`} key={p.id}>
+              <button type="button" className="studio-saved-open" title={p.topic} disabled={locked} onClick={() => void openProject(p.id)}>{p.topic}</button>
+              <button type="button" className={`studio-star${p.favorite ? " on" : ""}`} aria-label={p.favorite ? "取消收藏" : "收藏"} title={p.favorite ? "取消收藏" : "收藏"} disabled={locked} onClick={() => void toggleFavorite(p)}>★</button>
+              <button type="button" className="studio-trash" aria-label="删除项目" title="删除项目" disabled={locked} onClick={() => void removeProject(p)}>✕</button>
+            </div>)}
+          </section> : null)}</div>
         <form onSubmit={submit}>
           <fieldset disabled={locked || Boolean(project)}><label>你想解释什么？<input required minLength={2} maxLength={160} value={input.topic} onChange={e => setInput({ ...input, topic: e.target.value })} placeholder="例如：为什么重复复习要隔一段时间？" /></label>
             <label>讲给谁听？<select value={input.audience} onChange={e => setInput({ ...input, audience: e.target.value })}><option>普通公众</option><option>初中生</option><option>大学新生</option></select></label>

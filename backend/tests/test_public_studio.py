@@ -312,3 +312,40 @@ def test_display_consistency_is_mechanical_and_idempotent():
     assert [n.model_dump() for n in draft.public_poster.nodes] == saved
     assert draft.diagram.labels == [n.label for n in draft.public_poster.nodes]
     assert pipeline.synchronize_display_labels(draft) == []
+
+
+def test_project_list_marks_video_and_favorite_and_delete_archives():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.studio_models import ProjectInput
+    import json
+    client = TestClient(app)
+    created = client.post("/api/studio/projects", json={"topic": "分类测试问题", "audience": "普通公众", "auto_sources": True, "sources": []}).json()
+    pid = created["id"]
+    # 未出片：无视频标记
+    items = client.get("/api/studio/projects").json()
+    row = next(x for x in items if x["id"] == pid)
+    assert row["has_video"] is False and row["favorite"] is False
+    # 收藏切换
+    assert client.post(f"/api/studio/projects/{pid}/favorite").json() == {"favorite": True}
+    row = next(x for x in client.get("/api/studio/projects").json() if x["id"] == pid)
+    assert row["favorite"] is True
+    assert client.post(f"/api/studio/projects/{pid}/favorite").json() == {"favorite": False}
+    # 有成功视频 → has_video 标记
+    from app.services import studio_store as store
+    from app.studio_models import MediaInput
+    from uuid import uuid4
+    store.append_version(pid, {"mode": "bailian", "version": 1, "review_status": "ai_checked_human_pending", "draft": {"title": "x"}})
+    media_request = MediaInput(request_id=uuid4(), expected_version=1, renderer="cartoon")
+    assert store.reserve_media(pid, media_request)
+    store.save_media(pid, {"id": str(media_request.request_id), "version": 1, "state": "succeeded", "stage": "完成",
+                           "video": "preview.mp4", "kind": "测试", "events": [], "scenes": [], "files": []})
+    row = next(x for x in client.get("/api/studio/projects").json() if x["id"] == pid)
+    assert row["has_video"] is True
+    # 删除 = 归档：列表消失、数据保留可恢复
+    assert client.delete(f"/api/studio/projects/{pid}").json() == {"ok": True}
+    assert pid not in {x["id"] for x in client.get("/api/studio/projects").json()}
+    assert client.get(f"/api/studio/projects/{pid}").status_code == 200
+    assert pid in {x["id"] for x in store.list_archived_projects()}
+    assert client.delete("/api/studio/projects/00000000-0000-0000-0000-000000000000").status_code == 404
+    assert client.post("/api/studio/projects/00000000-0000-0000-0000-000000000000/favorite").status_code == 404

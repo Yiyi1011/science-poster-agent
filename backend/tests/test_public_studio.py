@@ -343,3 +343,32 @@ def test_project_list_marks_video_and_delete_archives():
     assert client.get(f"/api/studio/projects/{pid}").status_code == 200
     assert pid in {x["id"] for x in store.list_archived_projects()}
     assert client.delete("/api/studio/projects/00000000-0000-0000-0000-000000000000").status_code == 404
+
+
+def test_media_proceed_from_blocked_requires_explicit_flag():
+    """有分镜但未通过检查的版本：默认拒绝制片；用户显式确认后才放行并留痕。"""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.services import studio_store as store
+    from app.studio_models import MediaInput
+    from uuid import uuid4
+    client = TestClient(app)
+    pid = client.post("/api/studio/projects", json={"topic": "直接制片测试", "audience": "普通公众", "auto_sources": True, "sources": []}).json()["id"]
+    store.append_version(pid, {"mode": "bailian", "version": 1, "review_status": "blocked",
+                               "draft": {"title": "x", "scenes": [{"scene_id": "V1", "heading": "h", "narration": "n", "visual_action": "a", "claim_ids": ["C1"]}]}})
+    try:
+        store.reserve_media(pid, MediaInput(request_id=uuid4(), expected_version=1, renderer="cartoon"))
+        raise AssertionError("未显式确认不应放行 blocked 版本")
+    except ValueError:
+        pass
+    allowed = MediaInput(request_id=uuid4(), expected_version=1, renderer="cartoon", proceed_from_blocked=True)
+    assert store.reserve_media(pid, allowed)
+    media = next(m for m in store.get_project(pid)["media"] if m["id"] == str(allowed.request_id))
+    assert media["proceeded_from_blocked"] is True
+    # 已通过检查的版本即使带确认标志也不留痕
+    pid2 = client.post("/api/studio/projects", json={"topic": "直接制片测试2", "audience": "普通公众", "auto_sources": True, "sources": []}).json()["id"]
+    store.append_version(pid2, {"mode": "bailian", "version": 1, "review_status": "ai_checked_human_pending", "draft": {"title": "x"}})
+    normal = MediaInput(request_id=uuid4(), expected_version=1, renderer="cartoon", proceed_from_blocked=True)
+    assert store.reserve_media(pid2, normal)
+    media2 = next(m for m in store.get_project(pid2)["media"] if m["id"] == str(normal.request_id))
+    assert media2.get("proceeded_from_blocked") is False

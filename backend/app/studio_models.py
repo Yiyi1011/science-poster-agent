@@ -141,3 +141,4 @@ class MediaInput(StrictModel):
     request_id: UUID
     expected_version: int = Field(ge=1)
     renderer: Literal["cartoon", "illustrated"] = "cartoon"
+    proceed_from_blocked: bool = False  # 用户明确确认：直接用未完全通过检查的现有分镜制作

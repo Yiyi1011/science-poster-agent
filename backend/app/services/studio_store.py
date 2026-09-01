@@ -189,7 +189,8 @@ def reserve_media(project_id, request):
         version = json.loads(row[0])
         if version["version"] != request.expected_version:
             raise ValueError("脚本已有新版本，请刷新")
-        if version.get("mode") != "bailian" or version.get("review_status") not in {"ai_checked_human_pending", "needs_human_review"}:
+        eligible = version.get("review_status") in {"ai_checked_human_pending", "needs_human_review"}
+        if version.get("mode") != "bailian" or not (eligible or (request.proceed_from_blocked and version.get("review_status") in {"blocked", "pending"})):
             raise ValueError("脚本还未通过基础检查，不能生成收费媒体")
         if db.execute("SELECT 1 FROM runs WHERE project=? AND state='running'", (project_id,)).fetchone():
             raise ValueError("请等待脚本审核完成")
@@ -200,6 +201,7 @@ def reserve_media(project_id, request):
                 raise ValueError("该版已有媒体或正在生成，不重复收费；请查看结果或先修改脚本")
         payload = {"id": str(request.request_id), "version": request.expected_version, "state": "running", "stage": "准备卡通视频" if request.renderer == "cartoon" else "准备生成插画与有声预览",
                    "events": [], "scenes": [], "files": [], "created_at": now(), "renderer": request.renderer,
+                   "proceeded_from_blocked": not eligible and request.proceed_from_blocked,
                    "kind": "千问规划+程序卡通动作+AI旁白字幕；非视频大模型" if request.renderer == "cartoon" else "AI插画+程序镜头运动+AI配音；非视频大模型原生动画"}
         db.execute("INSERT INTO media VALUES(?,?,?,?)", (str(request.request_id), project_id, request.expected_version, json.dumps(payload, ensure_ascii=False)))
     return True

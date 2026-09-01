@@ -21,7 +21,7 @@ const cartoonDiff = (before?: CartoonPlan, after?: CartoonPlan) => {
   const a=entries(before), b=entries(after);
   return [...new Set([...Object.keys(a),...Object.keys(b)])].filter(k=>a[k]!==b[k]).map(k=>({field:k,before:a[k]??"（无）",after:b[k]??"（移除）"}));
 };
-type Media = { id: string; version: number; state: string; stage: string; video?: string; poster?: string; duration_seconds?: number; kind: string; resumed_from?: string;
+type Media = { id: string; version: number; state: string; stage: string; video?: string; poster?: string; duration_seconds?: number; kind: string; resumed_from?: string; proceeded_from_blocked?: boolean;
   events?: Array<{ at: string; stage: string }>;
   render_revisions?: Array<{reason:string;previous_video:string;video:string}>;
   structure_repairs?: Array<{stage:string;state:string;errors?:Array<{field:string;type:string}>;final_errors?:Array<{field:string;type:string}>}>;
@@ -203,15 +203,16 @@ export default function Studio() {
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  async function generateMedia() {
+  async function generateMedia(proceed = false) {
     if (!project || !version) return;
+    if (proceed && !window.confirm("这一稿未完全通过证据自动检查（部分内容可能超出已核实资料范围）。确认仍用它直接制作视频？")) return;
     setBusy(true); setError("");
     const previous = mediaRetry.current;
     const operation = previous?.project === project.id && previous.version === version.version ? previous :
       { project: project.id, version: version.version, request_id: crypto.randomUUID() };
     mediaRetry.current = operation;
     try {
-      setProject(await request<Project>(`${api}/projects/${project.id}/media`, { request_id: operation.request_id, expected_version: operation.version, renderer: "cartoon" }));
+      setProject(await request<Project>(`${api}/projects/${project.id}/media`, { request_id: operation.request_id, expected_version: operation.version, renderer: "cartoon", proceed_from_blocked: proceed }));
       mediaRetry.current = null;
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -286,7 +287,7 @@ export default function Studio() {
         <div className="studio-result-header"><h2>02 作品与改进</h2>{(run || selectedMedia) && <span role="status" className={running ? "studio-working" : ""}>{activeStage || selectedMedia?.stage || run?.stage}</span>}</div>
         {run?.error && <p className="studio-error">{run.error}</p>}
         {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 问题初解</summary><p>{project.research.explanation.answer}</p><small>{primerBased ? "未找到可核对的公开网页时，此初步回答直接作为作品基础（内容未经外部来源核实）。" : "这是检索前的导读；实际作品以后续资料核对和修订结果为准。"}</small></details>}
-        {project?.research && !project.research.sources.length && !running && <div className="studio-research">{primerBased && <p className="studio-hint">未找到可核对的公开网页，本片基于AI初步解释生成，内容未经外部来源核实。</p>}<button onClick={() => newInput(input)}>复制问题，使用新版重新检索</button><small>旧失败记录保留；复制后点击生成会发起新的百炼调用。</small></div>}
+        {project?.research && !project.research.sources.length && !running && primerBased && <p className="studio-hint">未找到可核对的公开网页，本片基于AI初步解释生成，内容未经外部来源核实。</p>}
         {project?.research && <details className="studio-research"><summary>自动查找的资料 · {project.research.sources.length}份原文摘录</summary>
           {project.research.sources.map(s => <article key={s.source_id}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.source_id} · {s.title} ↗</a><p>{project.research!.selected.find(p => p.source_id === s.source_id)?.reason}</p><details><summary>查看原文摘录</summary><blockquote>{s.text}</blockquote></details></article>)}
           {project.research.gap && <p>{project.research.gap}</p>}<small>搜索命中和逐字匹配不等于科学认证。自动读取暂限公开HTML；不会绕过付费墙或登录。</small>
@@ -306,7 +307,8 @@ export default function Studio() {
                 {!selectedMedia?.video && !running && mediaEligible && <><button disabled={locked} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
                 <small>通常需要数分钟。新建项目会自动制片；这个按钮仅用于旧版或中断任务的恢复。</small></>}
                 {!selectedMedia?.video && !running && !mediaEligible && <div className={primerBased ? "studio-research" : "studio-error"}><strong>{primerBased ? "本版基于AI初步解释，尚未经外部来源核实。" : "正在等待可靠资料。"}</strong><br/>
-                  {version?.review_status === "blocked" ? <><span>{primerBased ? "未找到可核对的公开网页，已用AI初步回答先行制作，人工核对后再发布。" : "当前检索到的内容还不足以支持完整解释。"}</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>继续扩大检索范围并生成视频</button><small>无需你提供论文；系统会换用同义词，查找官方机构、高校与专业组织来源。</small></> : "请先选择最新版本。"}</div>}
+                  {version?.review_status === "blocked" ? <><span>{primerBased ? "未找到可核对的公开网页，已用AI初步回答先行制作，人工核对后再发布。" : version?.draft?.scenes?.length ? "已有分镜，但未完全通过证据自动检查。" : "当前检索到的内容还不足以支持完整解释。"}</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>继续扩大检索范围并生成视频</button>{version?.draft?.scenes?.length ? <button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void generateMedia(true)}>已有分镜，直接用现有稿制作视频</button> : null}<small>直接制片不会跳过人工判断：确认后仍会记录这一决定。</small></> : "请先选择最新版本。"}</div>}
+                {selectedMedia?.proceeded_from_blocked && <p className="studio-error">本片由你确认后直接使用未完全通过证据检查的稿子制作，发布前请再人工核对内容。</p>}
                 {selectedMedia?.video && <p><strong>已找到本版可播放成片（v{selectedMedia.version}）。</strong> 下方可直接播放或下载；刷新页面不会丢失。</p>}
                 {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}

@@ -173,6 +173,19 @@ def test_automatic_research_snapshot_is_immutable_and_project_local():
     with pytest.raises(Exception): store.save_research(p["id"], snapshot)
 
 
+def test_research_retry_and_project_archive_are_traceable_and_recoverable():
+    p = store.create_project(ProjectInput(topic="什么是token", auto_sources=True))
+    store.save_research(p["id"], {"sources": [], "gap": "first"})
+    assert store.append_research(p["id"], {"sources": [{"source_id": "S1"}], "gap": ""}) == 2
+    assert store.get_project(p["id"])["research"]["sources"][0]["source_id"] == "S1"
+    store.archive_project(p["id"], "duplicate test")
+    assert p["id"] not in {item["id"] for item in store.list_projects()}
+    assert store.get_project(p["id"])["input"]["topic"] == "什么是token"
+    assert store.list_archived_projects()[0]["reason"] == "duplicate test"
+    store.restore_project(p["id"])
+    assert p["id"] in {item["id"] for item in store.list_projects()}
+
+
 def test_failed_research_stops_generation_and_is_not_automatically_rebilled():
     p = store.create_project(ProjectInput(topic="未知问题", auto_sources=True))
     async def empty(*args): return {"sources": [], "gap": "没有证据"}

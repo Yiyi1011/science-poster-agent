@@ -63,6 +63,7 @@ const purposeNames: Record<string, string> = { studio_question_orientation: "初
   knowledge_retrieval: "知识检索", studio_cartoon_planning: "卡通规划", studio_cartoon_planning_schema_repair: "卡通规划修复",
   studio_cartoon_repair: "卡通方案修改", tts_generation: "AI旁白", vision_review: "画面检查",
   image_generation: "插画生成", poster_plan: "海报规划", studio_illustration_planning: "插画规划" };
+purposeNames.studio_review_forced_rewrite = "将审核意见实际改入稿件";
 const typeNames: Record<string, string> = { string_type: "文本类型不符", integer_type: "整数类型不符", missing: "缺少字段",
   extra_forbidden: "出现多余字段", literal_error: "取值不在允许范围", model_attributes_type: "结构类型不符", list_type: "列表类型不符" };
 const claimLabel = (ids: string[]) => ids.map(id => `第${id.replace(/^C/, "")}条事实`).join("、");
@@ -110,6 +111,8 @@ export default function Studio() {
   const activeMedia = [...versionMedia].reverse().find(m => m.state === "running");
   const activeStage = activeMedia?.stage || (run?.state === "running" ? run.stage : "");
   const failedMediaCount = versionMedia.filter(m => m.state === "failed").length;
+  const mediaEligible = Boolean(version && version.version === latest?.version &&
+    ["ai_checked_human_pending", "needs_human_review"].includes(version.review_status));
   const mediaUrl = (name: string) => `${api}/projects/${project!.id}/media/${selectedMedia!.id}/${encodeURIComponent(name)}`;
 
   useEffect(() => { Promise.all([request<Input[]>(`${api}/presets`), request<Summary[]>(`${api}/projects`), request<{ mock_ai: boolean; text_model: string }>("/api/config/public")])
@@ -161,11 +164,13 @@ export default function Studio() {
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  async function runProject(value: Project, note = "") {
+  async function runProject(value: Project, note = "", forceRebuild?: boolean, forceVideo?: boolean) {
     const number = value.versions.at(-1)?.version ?? 0;
+    const rebuildSources = forceRebuild ?? rebuild;
+    const makeVideo = forceVideo ?? !textOnly;
     const previous = retry.current;
-    const operation = previous?.project === value.id && previous.version === number && previous.feedback === note && previous.rebuild === rebuild && previous.make_video === !textOnly ? previous
-      : { project: value.id, version: number, feedback: note, request_id: crypto.randomUUID(), rebuild, make_video: !textOnly };
+    const operation = previous?.project === value.id && previous.version === number && previous.feedback === note && previous.rebuild === rebuildSources && previous.make_video === makeVideo ? previous
+      : { project: value.id, version: number, feedback: note, request_id: crypto.randomUUID(), rebuild: rebuildSources, make_video: makeVideo };
     retry.current = operation;
     const next = await request<Project>(`${api}/projects/${value.id}/run`, { request_id: operation.request_id, expected_version: number, feedback: note, rebuild: operation.rebuild, make_video: operation.make_video });
     setTab(operation.make_video ? "scenes" : "explain");
@@ -186,6 +191,13 @@ export default function Studio() {
     if (!project) return;
     setBusy(true); setError("");
     try { await runProject(project, feedback); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+
+  async function retryResearchAndVideo() {
+    if (!project) return;
+    setBusy(true); setError(""); setTab("scenes");
+    try { await runProject(project, "自动扩展检索词，分清歧义后重新组织科普内容。", true, true); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
   async function generateMedia() {
@@ -267,8 +279,10 @@ export default function Studio() {
             {tab === "scenes" && <>
               {running && <ProductionProgress stage={activeStage || "正在继续自动制作"} events={activeMedia?.events} />}
               <section className="studio-media"><h3>你的科普视频</h3><p>千问规划卡通对象与动作 → 核查并修正 → AI旁白与字幕 → 可播放下载的MP4。画风参考太阳动画，目标约60—90秒；程序动画不冒充视频大模型成片。</p>
-                {!selectedMedia?.video && !running && <><button disabled={locked || version?.version !== latest?.version || !["ai_checked_human_pending", "needs_human_review"].includes(version?.review_status ?? "")} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
-                <small>使用现有预算；审核提醒不等于科学终审通过。通常需要数分钟，开始后上方会显示真实进度。</small></>}
+                {!selectedMedia?.video && !running && mediaEligible && <><button disabled={locked} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
+                <small>通常需要数分钟。新建项目会自动制片；这个按钮仅用于旧版或中断任务的恢复。</small></>}
+                {!selectedMedia?.video && !running && !mediaEligible && <div className="studio-error"><strong>当前不能制片，不是按钮故障。</strong><br/>
+                  {version?.review_status === "blocked" ? <><span>系统发现当前来源不足以支撑视频中的说法，不会把无依据内容强行做成视频。</span><button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>让千问扩展检索并自动重做视频</button><small>无需你提供论文。系统会自动分清歧义、换关键词查询官方来源，通过后直接进入制片。</small></> : "请先选择最新版本或完成基础审核。"}</div>}
                 {selectedMedia?.video && <p><strong>已找到本版可播放成片（v{selectedMedia.version}）。</strong> 下方可直接播放或下载；刷新页面不会丢失。</p>}
                 {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}

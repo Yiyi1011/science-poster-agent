@@ -26,12 +26,20 @@ def connection():
     db.executescript("""
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, input TEXT NOT NULL, created TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS research(project TEXT PRIMARY KEY, payload TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS research_history(project TEXT, attempt INTEGER, payload TEXT NOT NULL, created TEXT NOT NULL,
+            PRIMARY KEY(project, attempt));
+        CREATE TABLE IF NOT EXISTS project_archive(project TEXT PRIMARY KEY, reason TEXT NOT NULL, archived TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS media(id TEXT PRIMARY KEY, project TEXT NOT NULL, version INTEGER NOT NULL, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS versions(project TEXT, number INTEGER, payload TEXT NOT NULL,
             PRIMARY KEY(project, number));
         CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, project TEXT, request TEXT, state TEXT,
             stage TEXT, error TEXT DEFAULT '', updated TEXT);
     """)
+    # Non-destructive migrations: preserve the original one-row snapshot as attempt 1.
+    db.execute("""INSERT OR IGNORE INTO research_history(project,attempt,payload,created)
+                  SELECT research.project,1,research.payload,COALESCE(projects.created,?)
+                  FROM research LEFT JOIN projects ON projects.id=research.project""", (now(),))
+    db.commit()  # do not leave the migration transaction open for BEGIN IMMEDIATE callers
     try:
         yield db
         db.commit()
@@ -51,7 +59,9 @@ def create_project(data: ProjectInput):
 
 def list_projects():
     with connection() as db:
-        rows = db.execute("SELECT id,input,created FROM projects ORDER BY created DESC LIMIT 100").fetchall()
+        rows = db.execute("""SELECT id,input,created FROM projects
+                           WHERE id NOT IN (SELECT project FROM project_archive)
+                           ORDER BY created DESC LIMIT 100""").fetchall()
     return [{"id": r["id"], "topic": json.loads(r["input"])["topic"], "created_at": r["created"]} for r in rows]
 
 
@@ -62,7 +72,7 @@ def get_project(project_id):
             raise KeyError("项目不存在")
         versions = db.execute("SELECT payload FROM versions WHERE project=? ORDER BY number", (project_id,)).fetchall()
         runs = db.execute("SELECT id,state,stage,error,updated FROM runs WHERE project=? ORDER BY updated", (project_id,)).fetchall()
-        research = db.execute("SELECT payload FROM research WHERE project=?", (project_id,)).fetchone()
+        research = db.execute("SELECT payload FROM research_history WHERE project=? ORDER BY attempt DESC LIMIT 1", (project_id,)).fetchone()
         media = db.execute("SELECT payload FROM media WHERE project=? ORDER BY rowid", (project_id,)).fetchall()
     return {"id": row["id"], "input": json.loads(row["input"]), "created_at": row["created"],
             "versions": [json.loads(v["payload"]) for v in versions], "runs": [dict(r) for r in runs],
@@ -72,8 +82,42 @@ def get_project(project_id):
 
 def save_research(project_id, payload):
     # Separate immutable provenance snapshot; original user input is never overwritten.
+    serialized = json.dumps(payload, ensure_ascii=False)
     with connection() as db:
-        db.execute("INSERT INTO research VALUES(?,?)", (project_id, json.dumps(payload, ensure_ascii=False)))
+        db.execute("INSERT INTO research VALUES(?,?)", (project_id, serialized))
+        db.execute("INSERT OR IGNORE INTO research_history VALUES(?,?,?,?)", (project_id, 1, serialized, now()))
+
+
+def append_research(project_id, payload):
+    """Add a new traceable retrieval attempt without overwriting prior evidence."""
+    serialized = json.dumps(payload, ensure_ascii=False)
+    with connection() as db:
+        db.execute("BEGIN IMMEDIATE")
+        attempt = db.execute("SELECT COALESCE(MAX(attempt),0)+1 FROM research_history WHERE project=?",
+                             (project_id,)).fetchone()[0]
+        db.execute("INSERT INTO research_history VALUES(?,?,?,?)", (project_id, attempt, serialized, now()))
+    return attempt
+
+
+def archive_project(project_id, reason):
+    """Remove a duplicate from normal listings while keeping it fully recoverable."""
+    with connection() as db:
+        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            raise KeyError("项目不存在")
+        db.execute("INSERT OR REPLACE INTO project_archive VALUES(?,?,?)", (project_id, reason, now()))
+
+
+def restore_project(project_id):
+    with connection() as db:
+        db.execute("DELETE FROM project_archive WHERE project=?", (project_id,))
+
+
+def list_archived_projects():
+    with connection() as db:
+        rows = db.execute("""SELECT a.project,p.input,a.reason,a.archived FROM project_archive a
+                           JOIN projects p ON p.id=a.project ORDER BY a.archived DESC""").fetchall()
+    return [{"id": row["project"], "topic": json.loads(row["input"])["topic"],
+             "reason": row["reason"], "archived_at": row["archived"]} for row in rows]
 
 
 def reserve(project_id, request):

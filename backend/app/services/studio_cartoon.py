@@ -259,16 +259,19 @@ async def execute_cartoon(project_id, request):
                     target=ROOT/voice.file_path;entry["voice"]={"file":target.name,"duration":voice.duration_seconds,"model":voice.model,"request_id":voice.request_id}
                 audio.append(target);job["files"].append(target.name);store.save_media(project_id,job)
             stage("合成卡通动作、AI旁白与字幕（目标60—90秒）")
-            result=await asyncio.to_thread(compose,draft,images,audio,folder,cartoon_plans=adopted)
+            result=await asyncio.to_thread(compose,draft,images,audio,folder,cartoon_plans=adopted,
+                                           planning_label="本地模板规划" if job.get("planning_fallback") else "千问规划")
             job.update(result);job["files"].extend(["preview.mp4","subtitles.srt","manifest.json"])
             integrity=await asyncio.to_thread(verify_media_output,folder)
             job["media_integrity_check"]=integrity
             job["files"].extend(integrity.get("sample_frames",[]))
-            (folder/"manifest.json").write_text(json.dumps(job,ensure_ascii=False,indent=2),encoding="utf-8")
             if integrity["status"]!="ok":
                 stage(f"视频完整性检查未通过（{integrity.get('error','未知')}），素材保留；检查后可重试","failed")
+                (folder/"manifest.json").write_text(json.dumps(job,ensure_ascii=False,indent=2),encoding="utf-8")
                 return
             stage("卡通科普视频已完成；请播放核查内容与听感","succeeded")
+            # Persist after the terminal stage so the portable manifest agrees with SQLite.
+            (folder/"manifest.json").write_text(json.dumps(job,ensure_ascii=False,indent=2),encoding="utf-8")
     except asyncio.CancelledError:
         stage("任务中断，素材与调用记录保留；不自动重复收费","failed");raise
     except Exception as exc:

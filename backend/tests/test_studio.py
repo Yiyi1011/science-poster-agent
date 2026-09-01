@@ -177,7 +177,7 @@ def test_recheck_warning_triggers_second_round_without_human_click():
     assert not responses
 
 
-def test_second_round_warning_stops_without_infinite_retry():
+def test_second_round_warning_finishes_with_human_review_without_infinite_retry():
     project = store.create_project(data())
     draft = pipeline.mock_draft(data()).model_dump()
     warning = {"target": "V2", "severity": "warning", "message": "仍需人工检查"}
@@ -190,7 +190,7 @@ def test_second_round_warning_stops_without_infinite_retry():
     result = store.get_project(project["id"])
     assert len(result["versions"]) == 3
     assert result["versions"][-1]["review_status"] == "needs_human_review"
-    assert result["runs"][-1]["state"] == "blocked"
+    assert result["runs"][-1]["state"] == "succeeded"
     assert not responses
 
 

@@ -48,7 +48,7 @@ def test_unverified_answer_survives_failed_search_without_becoming_source():
         result = asyncio.run(research.research(Client(), "未知基础问题", lambda _: None))
     assert result["explanation"]["status"] == "model_background_unverified"
     assert result["sources"] == [] and result["gap"]
-    assert len(result["calls"]) == 3
+    assert len(result["calls"]) == 4  # orientation + three bounded retrieval attempts
 
 
 def test_technology_catalog_is_fetched_when_search_plugin_is_unavailable():
@@ -100,7 +100,7 @@ def test_filtered_results_retry_and_log_without_saving_secret_urls():
         return [{"url": "https://bad.example/?secret=abc"}], {}
     with patch.object(research, "search", side_effect=search):
         result = asyncio.run(research.research(Client(), "unknown", lambda _: None))
-    assert seen == [True, False]
+    assert seen == [True, False, False]
     assert result["events"] and "secret" not in str(result)
 
 

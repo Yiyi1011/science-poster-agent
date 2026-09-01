@@ -26,8 +26,15 @@ def find_font():
 
 def wrap_pixels(value, font, width):
     result, line = [], ""
+    # Chinese punctuation belongs to the preceding phrase.  Keeping it there may
+    # exceed the target width by one glyph, but avoids a lone full stop/comma on
+    # the next subtitle line (which reads like a broken sentence to viewers).
+    trailing_punctuation = set("，。！？；：、）》」』】”’…—,.;:!?)]}")
     for char in value:
         if line and font.getlength(line + char) > width:
+            if char in trailing_punctuation:
+                line += char
+                continue
             result.append(line)
             line = ""
         line += char
@@ -127,7 +134,7 @@ def illustrated_poster(draft, image, target, font_path):
     canvas.crop((0, 0, 1080, y + 50)).save(target)
 
 
-def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
+def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, planning_label="千问规划"):
     if len(image_paths) != len(draft.scenes) or len(audio_paths) != len(draft.scenes):
         raise ValueError("Every scene requires an approved illustration and voice")
     font_path = find_font()
@@ -198,7 +205,7 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
                     text_y += line_height
                 draw.rectangle((0, H - 6, W * seconds / cursor, H), fill="#ffda83")
                 if cartoon_plans:
-                    draw.text((44, 689), "千问规划 · 程序卡通动画 · AI旁白 · 待人工终审",font=small_font,fill="#75d9c4")
+                    draw.text((44, 689), f"{planning_label} · 程序卡通动画 · AI旁白 · 待人工终审",font=small_font,fill="#75d9c4")
                 process.stdin.write(canvas.tobytes())
             process.stdin.close()
             if process.wait(timeout=60) != 0:
@@ -211,7 +218,7 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
             "timing_note": "逐镜采用真实配音时长；完整句子保持在同一字幕块并在画面内换行，非逐字强制对齐"}
 
 
-def verify_media_output(folder, video_name="preview.mp4"):
+def verify_media_output(folder, video_name="preview.mp4", subtitle_name="subtitles.srt"):
     """Post-compose integrity (brief 6.1.10): decode the final MP4, read duration, audio
     track and three sample frames. Evidence lands in the job manifest, never a fake pass."""
     import re
@@ -229,16 +236,60 @@ def verify_media_output(folder, video_name="preview.mp4"):
     has_audio = "Audio:" in info
     frames = []
     try:
-        for index, position in enumerate(("0.25", "0.5", "0.75"), 1):
+        if duration is None or duration <= 0:
+            raise ValueError("视频没有可读取的时长")
+        # Inspect the whole programme, not three nearly identical frames from its first second.
+        for index, fraction in enumerate((0.25, 0.5, 0.75), 1):
             frame_path = folder / f"integrity-frame-{index}.png"
+            position = f"{duration * fraction:.3f}"
             subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-ss", position,
                             "-i", str(path), "-frames:v", "1", str(frame_path)], check=True,
                            capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             frames.append(frame_path.name)
-    except subprocess.CalledProcessError as exc:
+    except (subprocess.CalledProcessError, ValueError) as exc:
         return {"status": "failed", "error": "视频解码失败", "detail": type(exc).__name__,
                 "duration_seconds": duration, "has_audio": has_audio}
-    if duration is None or not has_audio or len(frames) != 3:
+    subtitle_path = folder / subtitle_name
+    subtitle_check = verify_subtitles(subtitle_path, duration) if subtitle_path.is_file() else {
+        "status": "failed", "error": "缺少字幕文件", "cue_count": 0}
+    if duration is None or not has_audio or len(frames) != 3 or subtitle_check["status"] != "ok":
         return {"status": "failed", "error": "时长或音轨未通过", "duration_seconds": duration,
-                "has_audio": has_audio, "sample_frames": frames}
-    return {"status": "ok", "duration_seconds": duration, "has_audio": has_audio, "sample_frames": frames}
+                "has_audio": has_audio, "sample_frames": frames, "subtitles": subtitle_check}
+    return {"status": "ok", "duration_seconds": duration, "has_audio": has_audio,
+            "sample_frames": frames, "sample_positions_seconds": [round(duration * f, 3) for f in (0.25, 0.5, 0.75)],
+            "subtitles": subtitle_check}
+
+
+def verify_subtitles(path, video_duration):
+    """Check an exported SRT independently from the in-memory compose timeline."""
+    import re
+    content = path.read_text(encoding="utf-8").strip()
+    blocks = [block for block in re.split(r"\r?\n\r?\n", content) if block.strip()]
+    previous_end, incomplete = 0.0, []
+
+    def seconds(value):
+        match = re.fullmatch(r"(\d+):(\d+):(\d+),(\d{3})", value.strip())
+        if not match:
+            raise ValueError("invalid timestamp")
+        hours, minutes, secs, millis = map(int, match.groups())
+        return hours * 3600 + minutes * 60 + secs + millis / 1000
+
+    try:
+        for index, block in enumerate(blocks, 1):
+            lines = block.splitlines()
+            if len(lines) < 3 or " --> " not in lines[1]:
+                raise ValueError("invalid cue")
+            start_text, end_text = lines[1].split(" --> ", 1)
+            start, end = seconds(start_text), seconds(end_text)
+            text = "".join(lines[2:]).strip()
+            if not text or start < previous_end - 0.002 or end <= start or end > video_duration + 0.1:
+                raise ValueError("cue outside timeline")
+            if text[-1] not in "。！？!?．.…”’\"'」』）)]":
+                incomplete.append(index)
+            previous_end = end
+    except ValueError as exc:
+        return {"status": "failed", "error": str(exc), "cue_count": len(blocks)}
+    if not blocks or incomplete:
+        return {"status": "failed", "error": "字幕存在不完整句子", "cue_count": len(blocks),
+                "incomplete_cues": incomplete}
+    return {"status": "ok", "cue_count": len(blocks), "last_end_seconds": round(previous_end, 3)}

@@ -123,16 +123,46 @@ def _explainer_sections(primer_answer, claim_ids):
 _ROLE_ICONS = {"hook": "question", "example": "person", "mechanism": "server", "process": "book",
                "misconception": "question", "boundary": "lock", "takeaway": "check"}
 
+_VISUAL_KEYWORDS = [
+    (("太阳",), "sun", "太阳", "提供光照"), (("月亮", "月球"), "moon", "月亮", "反射太阳光"),
+    (("地球",), "earth", "地球", "观察月亮亮面"), (("AI", "模型", "人工智能"), "robot", "AI", "生成语言或判断"),
+    (("API", "接口"), "book", "API规则", "规定软件怎样沟通"), (("手机", "应用", "App"), "phone", "应用", "发出功能请求"),
+    (("服务器", "后台", "系统"), "server", "后台系统", "接收并处理请求"), (("学生", "学习", "复习"), "person", "学习者", "主动理解与回想"),
+    (("资料", "原文", "来源"), "book", "权威资料", "提供可核对依据"), (("检查", "核对", "验证"), "check", "核查", "确认事实与边界"),
+    (("安全", "权限", "隐私"), "lock", "安全边界", "需要额外保护"), (("云",), "cloud", "云服务", "通过网络提供能力"),
+]
+
+
+def _fallback_actors(scene):
+    text = scene.heading + scene.narration + scene.visual_action
+    actors, icons = [], set()
+    for words, icon, label, explanation in _VISUAL_KEYWORDS:
+        if icon not in icons and any(word in text for word in words):
+            actors.append({"icon": icon, "label": label, "explanation": explanation})
+            icons.add(icon)
+        if len(actors) == 4:
+            break
+    if len(actors) < 2:
+        fallback = _ROLE_ICONS.get(scene.role or "", "question")
+        for icon, label, explanation in ((fallback, scene.heading[:12], "展示本镜核心概念"),
+                                         ("person", "公众", "理解这部分知识"),
+                                         ("book", "资料", "提供可核对依据")):
+            if icon not in icons:
+                actors.append({"icon": icon, "label": label, "explanation": explanation})
+                icons.add(icon)
+            if len(actors) >= 2:
+                break
+    return actors
+
 
 def deterministic_cartoon_plan(draft):
     """Deterministic object plan when Qwen cartoon planning fails; text stays from the draft."""
     from app.services.studio_cartoon import CartoonPlan
     scenes = []
     for scene in draft.scenes:
-        icon = _ROLE_ICONS.get(scene.role or "", "question")
-        second = "person" if icon != "person" else "book"
+        actors = _fallback_actors(scene)
+        labels = "、".join(actor["label"] for actor in actors)
         scenes.append({"scene_id": scene.scene_id, "relationship": "reveal",
-                       "caption": _cut(scene.heading + "——本镜为模板示意，画面需人工补充检查。", 48),
-                       "actors": [{"icon": icon, "label": scene.heading[:6], "explanation": "按本镜内容补充"},
-                                  {"icon": second, "label": "公众", "explanation": "从资料理解这个知识"}]})
+                       "caption": _cut(f"{scene.heading}：用{labels}帮助理解", 42) + "（模板）",
+                       "actors": actors})
     return CartoonPlan.model_validate({"scenes": scenes})

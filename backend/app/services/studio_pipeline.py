@@ -49,6 +49,8 @@ PUBLIC_PROMPT = """
 9. 不把抽象定义推成系统必有的能力：有接口/协议不等于自动安全、必有权限验证、必经过网关转发，也不代表所有软件采用同一实现。
    具体产品行为、参数、权限、数字若无来源不能作为事实；只作假设示例时在旁白/画面明确标示“假设情境”。类比只能帮助理解约定，不能推出类比对象的全部性质。
 10. 审核区分“肯定有某能力”与“不能据此保证某能力”，不能把否定保证当成承诺。支持通俗转述和明确标注的概念类比，不要求每个生活化词语逐字出现在来源；只在增加实质性事实或误导推断时阻止。
+11. 一个来源同时讲某个术语的多种含义，不等于该来源无法支持其中一种含义。只要claim的quote能逐字定位且boundary明确限定领域，就应当保留；公众表达再用一句说明“同一个词在其他领域可能含义不同”，不得因网页包含其他小节而判定引文失效。
+12. 来源没有提供具体拆分示例、数字或产品实现时，不要自己发明一个“可能”示例。改用不增加新事实的抽象动画，如“一段文字拆成若干小块”，并注明画面只是理解示意。如果问题可修复，必须在revised中实际改好，不能只留finding后拒绝。
 """
 BASE_PROMPT += PUBLIC_PROMPT
 GEN_PROMPT = BASE_PROMPT + "生成一张海报和6—8个独立通俗分镜。最多4条核心事实，尽量覆盖定义、机制、例子及边界。紧扣topic，资料不支持时不偷换主题。"
@@ -60,7 +62,13 @@ findings指出具体位置和问题。若需要修改，revised给出完整修�
 证据与主题不相关、无法修复的科学问题用blocker，不能凭知识补写；可修复的措辞问题用warning。
 不要为了展示功能而制造修改，无问题允许findings为空。只改变确实需要改的部分。
 """
-RECHECK_PROMPT = BASE_PROMPT + "复检修改后的最终稿。只返回findings，revised必须为null。无法由现有证据支持或可能误导公众的问题标blocker。"
+FORCED_REWRITE_PROMPT = BASE_PROMPT + """你是实际改稿编辑，不再重复评论问题。
+以draft为底稿，必须返回完整revised，逐项执行repair_instructions：删除无来源的具体例子、数字、拆分结果和认知/意图断言，改成只由claims与quote支持的抽象白话。
+不可新增claim、source_id或外部知识；保持6—8镜、完整讲解和理解题。画面中的小方块、箭头等只能标为“理解示意”，不写一个具体句子应如何拆分。
+若quote逐字可定位且boundary已限定语境，不因同页还有其他含义而否定它。findings只保留修改后仍然无法解决的问题；已修好的不再重复。"""
+RECHECK_PROMPT = BASE_PROMPT + """复检修改后的最终稿。只返回findings，revised必须为null。无法由现有证据支持或可能误导公众的问题标blocker。
+判定引文时只看该quote是否逐字定位并直接支持claim，不得以“同一网页还讲了该词的另一个含义”为理由否定已明确限定boundary的claim。
+已明确标为“理解示意”且不增加具体拆分结果的抽象画面，不应当作伪造事实。"""
 
 
 def normalized(text):
@@ -324,16 +332,20 @@ async def execute(project_id, request):
             if not data.sources and data.auto_sources and not settings.mock_ai:
                 from app.services.studio_research import research
                 snapshot = project.get("research")
-                if snapshot is None:
+                if snapshot is None or request.rebuild:
                     snapshot = await research(client, data.topic, lambda label: store.stage(request_id, label))
-                    store.save_research(project_id, snapshot)
+                    if project.get("research") is None:
+                        store.save_research(project_id, snapshot)
+                    else:
+                        store.append_research(project_id, snapshot)
                 if snapshot.get("sources"):
                     data = ProjectInput.model_validate(dict(project["input"], sources=snapshot["sources"]))
                 else:
-                    store.stage(request_id, "未获得足够来源", "blocked", snapshot.get("gap") or "请补充相关资料。")
+                    store.stage(request_id, "自动换词检索后仍无法可靠核实", "blocked",
+                                snapshot.get("gap") or "系统暂时无法从可读的权威网页核实该问题。")
                     return
             if not data.sources:
-                store.stage(request_id, "需要补充资料", "blocked", "请添加与主题相关的权威摘录；不会默认查询太阳知识库。")
+                store.stage(request_id, "未获得可核实来源", "blocked", "系统暂时无法可靠完成该问题；不会用无依据的内容强行制片。")
                 return
             mode = "mock" if settings.mock_ai else "bailian"
             model = "none (mock)" if settings.mock_ai else settings.qwen_studio_model
@@ -383,17 +395,31 @@ async def execute(project_id, request):
                     "feedback": request.feedback, "previous_findings": previous_findings,
                     "structural_findings": validate_evidence(working_draft, data), "communication_findings": validate_communication(working_draft, data),
                     "schema": Review.model_json_schema()}, "studio_review_rewrite", Review)
+                if review.revised is None and review.findings and not validate_evidence(working_draft, data):
+                    # Some models correctly enumerate repairable issues but omit the actual
+                    # rewritten object.  One bounded rewrite call converts that critique into
+                    # a candidate instead of repeating the same unchanged draft for two rounds.
+                    store.stage(request_id, f"将审核意见实际改入稿件（第{iteration}轮）")
+                    review = await checked(FORCED_REWRITE_PROMPT, {
+                        "project": data.model_dump(), "draft": working_draft.model_dump(),
+                        "repair_instructions": [finding.model_dump() for finding in review.findings],
+                        "feedback": request.feedback, "schema": Review.model_json_schema()},
+                        "studio_review_forced_rewrite", Review)
                 candidate = (review.revised or working_draft).model_copy(deep=True)
                 mechanical_changes.extend(synchronize_display_labels(candidate))
                 structural = validate_evidence(candidate, data)
                 final_findings = list(structural) + validate_communication(candidate, data)
-                if not structural:
+                # Recheck an actual revision.  If Qwen has only repeated its
+                # critique and still omitted `revised`, another recheck adds a
+                # paid call without creating a new candidate; retain the
+                # finding and let the bounded second review round try once.
+                if not structural and (review.revised is not None or not review.findings):
                     store.stage(request_id, f"复检修订稿与证据边界（第{iteration}轮）")
                     recheck = await checked(RECHECK_PROMPT, {"project": data.model_dump(), "draft": candidate.model_dump(),
                         "schema": Review.model_json_schema()}, "studio_recheck", Review)
                     final_findings += [f.model_dump() for f in recheck.findings]
                 if review.revised is None:
-                    final_findings += [f.model_dump() for f in review.findings if f.severity == "blocker"]
+                    final_findings += [f.model_dump() for f in review.findings]
                 blocked = any(f["severity"] == "blocker" for f in final_findings)
                 changes = diff_fields(draft.model_dump(), candidate.model_dump())
                 # Keep original even when the proposed revision fails; no misleading accepted version.
@@ -410,7 +436,14 @@ async def execute(project_id, request):
                 previous_findings = final_findings
                 if structural or not needs_attention:
                     break
-            store.stage(request_id, "需要补充证据或人工核查" if needs_attention else "审核完成；关键修改已留档", "blocked" if needs_attention else "succeeded")
+            # Warnings remain visible for human final review, but only evidence/science
+            # blockers stop the default video pipeline.  This keeps the one-click promise
+            # consistent with reserve_media(), which already permits warning-only drafts.
+            store.stage(request_id,
+                        "需要补充证据；未进入制片" if blocked else
+                        "审核完成，带人工终审提醒；继续自动制片" if needs_attention else
+                        "审核完成；关键修改已留档",
+                        "blocked" if blocked else "succeeded")
     except asyncio.CancelledError:
         store.stage(request_id, "操作中断", "failed", "操作中断，已有版本保留；重新运行前请检查。")
         raise

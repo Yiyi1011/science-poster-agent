@@ -331,6 +331,8 @@ def test_cartoon_composition_has_video_and_subtitles_but_no_default_poster(tmp_p
     voice = tmp_path / "voice.wav"
     with wave.open(str(voice),"wb") as wav:
         wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(24000); wav.writeframes(b"\0\0"*6000)
+    # Qwen TTS can return a valid PCM payload with an oversized WAV data-length header.
+    malformed=bytearray(voice.read_bytes());malformed[40:44]=(0x7ffffffe).to_bytes(4,"little");voice.write_bytes(malformed)
     real_combine = video.combine_audio
     def fast_combine(paths, target, pad):
         assert pad == 68
@@ -343,4 +345,7 @@ def test_cartoon_composition_has_video_and_subtitles_but_no_default_poster(tmp_p
     assert result["fps"] == 20 and result["duration_seconds"] == 1.5
     assert "poster" not in result and not (tmp_path/"poster.png").exists()
     assert (tmp_path/"preview.mp4").stat().st_size > 1000
-    assert (tmp_path/"subtitles.srt").stat().st_size > 100
+    subtitles=(tmp_path/"subtitles.srt").read_text(encoding="utf-8")
+    lines=[line for line in subtitles.splitlines() if "-->" in line]
+    assert lines and all(not line.startswith("-") for line in lines)
+    assert lines[-1].endswith("00:00:01,500")

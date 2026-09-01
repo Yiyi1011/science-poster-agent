@@ -7,16 +7,16 @@
 | 文件 | 简要说明 |
 |---|---|
 | [backend/app/services/studio_media.py](../backend/app/services/studio_media.py) | 按脚本版本生成插画、视觉检查与重画、配音和媒体任务留痕 |
-| [backend/app/services/studio_video.py](../backend/app/services/studio_video.py) | 实际配音时序、停顿、字幕和卡通/插画MP4合成；卡通默认不做PNG |
+| [backend/app/services/studio_video.py](../backend/app/services/studio_video.py) | 按实际PCM字节计算配音时序、校验字幕区间，并合成卡通/插画MP4；卡通默认不做PNG |
 | [backend/app/services/studio_cartoon.py](../backend/app/services/studio_cartoon.py) | 千问规划对象/动作、非法装饰图标兼容与结构修复留痕、通用卡通绘制、视觉检查及同版旁白复用 |
 | [backend/tests/test_studio_extended.py](../backend/tests/test_studio_extended.py) | 基础问题检索、完整讲解、媒体幂等/路径/拒绝候选和本地视频回归 |
 | [scripts/verify_studio_media.py](../scripts/verify_studio_media.py) | 显式收费的单项目媒体实测脚本；不要当免费单元测试运行 |
-| [scripts/qa_studio_media.mjs](../scripts/qa_studio_media.mjs) | 只读浏览器验证视频优先、实际播放、MP4下载、修改记录和选做海报 |
+| [scripts/qa_studio_media.mjs](../scripts/qa_studio_media.mjs) | 只读浏览器验证自动选中修正版视频、实际播放、MP4下载、证据页和选做海报 |
 | [scripts/record_media_review.py](../scripts/record_media_review.py) | 追加明确人工复核意见，不覆盖模型检查或原视频 |
 | [scripts/recompose_cartoon.py](../scripts/recompose_cartoon.py) | 复用原方案和配音修正程序动效，不调用AI；旧MP4保留且记录程序修正 |
 | [frontend/src/main.tsx](../frontend/src/main.tsx) | 前端入口，默认通用工作台；`view=legacy/storyboard`进入早期页面 |
-| [frontend/src/Studio.tsx](../frontend/src/Studio.tsx) | 问题输入、自动找资料、海报预览、分镜播放及修改历史 |
-| [frontend/src/studio.css](../frontend/src/studio.css) | 工作台主体布局、独立滚动、手机适配和弹窗 |
+| [frontend/src/Studio.tsx](../frontend/src/Studio.tsx) | 问题输入、自动找资料、右侧真实制作进度、成片自动呈现及证据/修改历史 |
+| [frontend/src/studio.css](../frontend/src/studio.css) | 工作台主体布局、制作进度、独立滚动、手机适配和弹窗 |
 | [frontend/src/studio-updates.css](../frontend/src/studio-updates.css) | 自动来源入口和来源追溯折叠区样式 |
 | [backend/app/main.py](../backend/app/main.py) | FastAPI入口、路由注册、健康检查和前端静态托管 |
 | [backend/app/config.py](../backend/app/config.py) | 从本地环境读取模型、地域、预算配置；不要把真实密钥写进代码 |

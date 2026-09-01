@@ -22,6 +22,7 @@ const cartoonDiff = (before?: CartoonPlan, after?: CartoonPlan) => {
   return [...new Set([...Object.keys(a),...Object.keys(b)])].filter(k=>a[k]!==b[k]).map(k=>({field:k,before:a[k]??"（无）",after:b[k]??"（移除）"}));
 };
 type Media = { id: string; version: number; state: string; stage: string; video?: string; poster?: string; duration_seconds?: number; kind: string; resumed_from?: string;
+  events?: Array<{ at: string; stage: string }>;
   render_revisions?: Array<{reason:string;previous_video:string;video:string}>;
   structure_repairs?: Array<{stage:string;state:string;errors?:Array<{field:string;type:string}>;final_errors?:Array<{field:string;type:string}>}>;
   mechanical_repairs?: Array<{field:string;before:string;after:string;reason:string}>;
@@ -57,6 +58,17 @@ const fieldLabel = (path: string) => path.replaceAll("scenes", "分镜").replace
   .replaceAll("nodes", "节点").replaceAll("body", "解释").replaceAll("detail", "说明").replaceAll("role", "叙事环节")
   .replaceAll("explainer", "详细讲解").replaceAll("learning_check", "理解小问题");
 
+function ProductionProgress({ stage, events = [] }: { stage: string; events?: Array<{ at: string; stage: string }> }) {
+  const visible = events.slice(-6);
+  return <section className="studio-progress" aria-live="polite" aria-label="视频生成进度">
+    <div className="studio-progress-now"><span aria-hidden="true" /><div><small>自动制作正在进行</small><h3>{stage || "正在准备资料与创作任务"}</h3></div></div>
+    {visible.length ? <ol>{visible.map((event, index) => <li className={index === visible.length - 1 ? "current" : "done"} key={`${event.at}-${index}`}>
+      <span aria-hidden="true">{index === visible.length - 1 ? "●" : "✓"}</span><div><strong>{event.stage}</strong><small>{new Date(event.at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></div>
+    </li>)}</ol> : <ol className="studio-progress-plan"><li className="current"><span>●</span><div><strong>{stage || "检索并核对资料"}</strong><small>完成后将自动进入讲解、审核、卡通规划、配音字幕与合成</small></div></li></ol>}
+    <p>页面会自动读取真实执行进度，无需重复点击。自动修正会留下记录；视频完成后这里会直接切换为播放器。</p>
+  </section>;
+}
+
 export default function Studio() {
   const [input, setInput] = useState<Input>(blankInput);
   const [presets, setPresets] = useState<Input[]>([]);
@@ -83,7 +95,11 @@ export default function Studio() {
   const run = project?.runs.at(-1);
   const locked = busy || running;
   const posterUrl = project && version ? `${api}/projects/${project.id}/poster.svg?revision=${version.version}` : "";
-  const selectedMedia = project?.media?.filter(m => m.version === version?.version).at(-1);
+  const versionMedia = project?.media?.filter(m => m.version === version?.version) ?? [];
+  const selectedMedia = [...versionMedia].reverse().find(m => m.state === "succeeded" && Boolean(m.video)) ?? versionMedia.at(-1);
+  const activeMedia = [...versionMedia].reverse().find(m => m.state === "running");
+  const activeStage = activeMedia?.stage || (run?.state === "running" ? run.stage : "");
+  const failedMediaCount = versionMedia.filter(m => m.state === "failed").length;
   const mediaUrl = (name: string) => `${api}/projects/${project!.id}/media/${selectedMedia!.id}/${encodeURIComponent(name)}`;
 
   useEffect(() => { Promise.all([request<Input[]>(`${api}/presets`), request<Summary[]>(`${api}/projects`), request<{ mock_ai: boolean; text_model: string }>("/api/config/public")])
@@ -221,7 +237,7 @@ export default function Studio() {
         {error && <p role="alert" className="studio-error">{error}</p>}
       </aside>
       <section className="studio-results" aria-label="创作结果">
-        <div className="studio-result-header"><h2>02 作品与改进</h2>{(run || selectedMedia) && <span role="status" className={running ? "studio-working" : ""}>{selectedMedia?.state === "running" ? selectedMedia.stage : run?.stage}</span>}</div>
+        <div className="studio-result-header"><h2>02 作品与改进</h2>{(run || selectedMedia) && <span role="status" className={running ? "studio-working" : ""}>{activeStage || selectedMedia?.stage || run?.stage}</span>}</div>
         {run?.error && <p className="studio-error">{run.error}</p>}
         {project?.research?.explanation && <details className="studio-research" open={!draft}><summary>先听个明白 · 千问初步解释（未核实）</summary><p>{project.research.explanation.answer}</p><small>模型基础知识回答，尚未独立核实；下面的资料与最终作品可能纠正它。不是论文摘录或审核结论。</small></details>}
         {project?.research && !project.research.sources.length && !running && <div className="studio-research"><button onClick={() => newInput(input)}>复制问题，使用新版重新检索</button><small>旧失败记录保留；复制后点击生成会发起新的百炼调用。</small></div>}
@@ -230,7 +246,7 @@ export default function Studio() {
           {project.research.gap && <p>{project.research.gap}</p>}<small>搜索命中和逐字匹配不等于科学认证。自动读取暂限公开HTML；不会绕过付费墙或登录。</small>
           <details><summary>检索与读取记录</summary>{project.research.events.map((event, i) => <p key={i}>{event.state}{event.url ? ` · ${new URL(event.url).hostname}` : ""}</p>)}{project.research.calls.map((call, i) => <p key={i}>{call.model} · {call.purpose}<br /><small>{call.request_id}</small></p>)}</details>
         </details>}
-        {!draft ? <div className="studio-empty"><div className="studio-orbit">✦</div><h3>一个问题，一段科普</h3><p>卡通视频会在这里呈现。讲解、证据与修改记录一并保留，海报按需查看。</p><small>所有进度来自实际执行阶段，不用倒计时假装完成。</small></div> : <>
+        {!draft ? running ? <div className="studio-progress-wrap"><ProductionProgress stage={activeStage || run?.stage || "正在查找并核对资料"} events={activeMedia?.events} /></div> : <div className="studio-empty"><div className="studio-orbit">✦</div><h3>一个问题，一段科普</h3><p>卡通视频会在这里呈现。讲解、证据与修改记录一并保留，海报按需查看。</p><small>所有进度来自实际执行阶段，不用倒计时假装完成。</small></div> : <>
           <div className="studio-toolbar"><div role="tablist" aria-label="作品视图">{[["scenes", "科普视频"], ["explain", "一步步讲清楚"], ["poster", "配套海报（选做）"], ["evidence", "证据与版本"]].map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setPlaying(false); }}>{label}</button>)}</div>
             {!running && <a href={`${api}/projects/${project!.id}/export`}>导出草稿包 ↓</a>}</div>
           <div className="studio-scroll">
@@ -239,9 +255,12 @@ export default function Studio() {
             {tab === "explain" && <>{draft.explainer?.length ? draft.explainer.map((p, i) => <article className="studio-scene" key={i}><h3>{i + 1} · {p.heading}</h3><p>{p.body}</p><small>依据：{p.claim_ids.join("、")}</small></article>) : <p>这是旧版本，尚未保存详细讲解。使用下方“从原始资料重新组织整篇表达”可生成新版，保留旧稿。</p>}
               {draft.learning_check && <section className="studio-scene"><h3>想一想，你会怎么解释？</h3><p>{draft.learning_check.question}</p><details><summary>看看解释</summary><p>{draft.learning_check.answer}</p></details></section>}</>}
             {tab === "scenes" && <>
+              {running && <ProductionProgress stage={activeStage || "正在继续自动制作"} events={activeMedia?.events} />}
               <section className="studio-media"><h3>你的科普视频</h3><p>千问规划卡通对象与动作 → 核查并修正 → AI旁白与字幕 → 可播放下载的MP4。画风参考太阳动画，目标约60—90秒；程序动画不冒充视频大模型成片。</p>
-                <button disabled={locked || version?.version !== latest?.version || !["ai_checked_human_pending", "needs_human_review"].includes(version?.review_status ?? "") || (selectedMedia?.state === "succeeded" && !selectedMedia.human_reviews?.some(r => r.status === "needs_changes"))} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
-                <small>使用现有预算；审核提醒不等于科学终审通过。再次制作会复用同版已完成配音；卡通规划与检查仍会产生费用。通常需要数分钟。</small>
+                {!selectedMedia?.video && !running && <><button disabled={locked || version?.version !== latest?.version || !["ai_checked_human_pending", "needs_human_review"].includes(version?.review_status ?? "")} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
+                <small>使用现有预算；审核提醒不等于科学终审通过。通常需要数分钟，开始后上方会显示真实进度。</small></>}
+                {selectedMedia?.video && <p><strong>已找到本版可播放成片（v{selectedMedia.version}）。</strong> 下方可直接播放或下载；刷新页面不会丢失。</p>}
+                {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}
                 {selectedMedia?.resumed_from && <p>本次已接续上次未完成任务，保留旧记录并复用已有素材。</p>}
                 {selectedMedia?.human_reviews?.map((r, i) => <p className="studio-error" key={i}>人工复核仍需修改：{r.issues.join("；")}</p>)}
                 {selectedMedia && <><p role="status">{selectedMedia.stage}</p>{selectedMedia.video && <><video controls preload="metadata" src={mediaUrl(selectedMedia.video)} /><p>{selectedMedia.duration_seconds}秒 · {selectedMedia.kind}</p><a href={mediaUrl(selectedMedia.video)} download>下载MP4</a>{selectedMedia.poster && <>{" · "}<a href={mediaUrl(selectedMedia.poster)} target="_blank" rel="noreferrer">查看插画海报PNG</a></>}</>}
@@ -274,7 +293,7 @@ export default function Studio() {
               {(project!.input.sources.length ? project!.input.sources : project!.research?.sources ?? []).map(s => <p key={s.source_id}>{s.source_id} · {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title} ↗</a> : s.title}</p>)}
               <details><summary>本版模型调用记录</summary>{version!.calls.map((c, i) => <p key={i}>{c.model} · {c.purpose}<br /><small>{c.request_id}</small></p>)}</details>
             </>}
-            <section className="studio-revisions"><h3>自动改进留下了什么？</h3>
+            {tab === "evidence" && <section className="studio-revisions"><h3>自动改进留下了什么？</h3>
               <p>{version!.changes.length ? `本版实际修改了 ${version!.changes.length} 处，展开查看前后对比。` : "本版没有已应用的内容修改；审核记录与内容改动分开保存。"}</p>
               {Boolean(version!.mechanical_changes?.length) && <details><summary>程序排版一致性处理（非AI科学修订）</summary>{version!.mechanical_changes!.map((c, i) => <p key={i}>{c.reason}：{display(c.before)} → {display(c.after)}{version!.review_status === "blocked" ? "（候选未应用）" : ""}</p>)}</details>}
               {(version!.findings ?? []).filter(f => f.severity !== "info").map((f, i) => <p key={i} className={f.severity === "blocker" ? "studio-error" : ""}>{f.target}：{f.message}</p>)}
@@ -285,7 +304,7 @@ export default function Studio() {
               <label>你的补充建议（选填）<textarea rows={2} value={feedback} maxLength={1000} disabled={locked} onChange={e => setFeedback(e.target.value)} placeholder="例如：第二镜太抽象，请换成日常生活中的解释，但不要改变科学含义。" /></label>
               <label className="studio-auto-source"><input type="checkbox" checked={rebuild} disabled={locked} onChange={e => setRebuild(e.target.checked)} />从原始资料重新组织整篇表达（仍保留旧版）</label>
               <button className="studio-primary" disabled={locked} onClick={() => void revise()}>{textOnly ? "再次自动审核与修订" : "自动修订并制作新版视频"}</button>
-            </section>
+            </section>}
           </div>
         </>}
       </section>

@@ -48,6 +48,14 @@ def srt_time(seconds):
     return f"{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}"
 
 
+def wav_pcm_duration(path):
+    """Use bytes actually present; some Qwen WAV downloads advertise an oversized data chunk."""
+    with wave.open(str(path), "rb") as audio:
+        frame_bytes = audio.readframes(audio.getnframes())
+        bytes_per_frame = audio.getnchannels() * audio.getsampwidth()
+        return len(frame_bytes) / bytes_per_frame / audio.getframerate()
+
+
 def combine_audio(paths, target, pad_to_total=0):
     signature, chunks, durations = None, [], []
     for path in paths:
@@ -99,9 +107,7 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
     font_path = find_font()
     title_font, subtitle_font, small_font = [ImageFont.truetype(font_path, n) for n in (36, 32, 20)]
     images = [Image.open(p).convert("RGB") for p in image_paths]
-    voice_durations=[]
-    for path in audio_paths:
-        with wave.open(str(path),'rb') as wav: voice_durations.append(wav.getnframes()/wav.getframerate())
+    voice_durations=[wav_pcm_duration(path) for path in audio_paths]
     durations = combine_audio(audio_paths, folder / "combined.wav", 68 if cartoon_plans else 0)
     fps = 20 if cartoon_plans else FPS
     end_times, cursor, captions, subtitles = [], 0.0, [], []
@@ -115,6 +121,11 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None):
             t = end
         cursor += duration
         end_times.append(cursor)
+    previous_end = 0.0
+    for start, end, _ in captions:
+        if start < previous_end - 1e-6 or start < 0 or end <= start or end > cursor + 1e-6:
+            raise ValueError("Subtitle timeline is outside the actual video duration")
+        previous_end = end
     (folder / "subtitles.srt").write_text("\n".join(subtitles), encoding="utf-8")
     if not cartoon_plans:
         illustrated_poster(draft, images[0], folder / "poster.png", font_path)

@@ -4,6 +4,7 @@
 
 | 模板/评审关注点 | 可提交证据 | 当前状态 |
 |---|---|---|
+| v0.4.2字幕纠错与自动制作可视化 | `docs/versions/process/v0.4.2-preview.md`、`evidence/studio-v042/browser-media/`、本机媒体修正记录 | 用户发现首句字幕重复后定位为Qwen WAV异常数据长度头；零模型调用重合成，旧片保留。第3/15/28秒抽帧字幕不同；右侧真实阶段、自动切换播放器及证据页修订入口已验证 |
 | v0.4.1失败恢复与跨主题可靠性 | `docs/versions/process/v0.4.1-preview.md`、`evidence/studio-v041/`、本机项目媒体记录 | AI主题旧脚本在3次结构失败后由新版成功生成6镜68秒MP4；4处装饰图标机械兼容可见且未改科学文字。API基础问题在百炼搜索短暂异常时仍读取MDN/AWS两份原文，生成8镜并通过自动审核；本轮未重复生成API视频 |
 | v0.4视频默认、海报选做与基础问题 | `docs/versions/process/v0.4.0-preview.md`、`evidence/studio-v040/`、`artifacts/studio-media/` | API自动审核后生成6镜68秒卡通MP4；千问规划＋程序动作＋AI旁白字幕，不是原生视频模型。插画实验和卡通首轮箭头误导分别保留人工问题记录，不冒充自动科学认证 |
 | v0.3.0通俗表达、6—8镜与只提问题检索 | `docs/versions/process/v0.3.0-preview.md`、`evidence/studio-v030/`及`browser-real/report.json` | 真实三案最新6/7/7镜；学习案有时间范围提醒。AI与学习案含明确开发者复核反馈，不冒充无人干预成功率；月球检索失败记录保留 |
@@ -24,7 +25,7 @@
 | 自动优先修正与可选手动微调 | `evidence/storyboard-editor-qa/automatic-first/report.json`、前后对照截图、`docs/storyboard-editor-guide.md` | 一次点击完成本地检查、无损字幕拆分、时长延长、复检和自动保存；记录输入/系统改动区别、原值/新值/原因。无修改也留档，网络重试不重复保存；手动微调折叠。截图来自明确练习输入，不冒充模型错误或视频重生成 |
 | 调用与费用 | `evidence/model-usage.jsonl`、`evidence/budget-authorization.md`、`evidence/billing-snapshot-2026-08-31.json` | v0.3结束时原价估算累计3.235630元；后续新增费用看最新台账/制作日志，不是实付。用户此前截图优惠后0.2799122559元无账期/付款状态，不等同历史实付；两项不能相加。搜索插件等费用须核对账单 |
 | 百炼应用调用证明 | `evidence/console/`与`evidence/knowledge-*.json` | 已有脱敏证据；正式提交截图待挑选 |
-| 应用可复现 | `README.md`、`backend/pyproject.toml`、`frontend/package.json`、`Dockerfile` | 本地可复现，67项后端测试和前端构建通过；云端持久化与访问控制仍需部署前确认 |
+| 应用可复现 | `README.md`、`backend/pyproject.toml`、`frontend/package.json`、`Dockerfile` | 本地可复现，当前147项后端测试和前端构建通过；云端持久化与访问控制仍需部署前确认 |
 | 公网部署 | `docs/deployment-fc.md`、`evidence/production-unified-server-check-2026-08-29.json` | 生产形态已验证；公网资源尚未创建 |
 | 完整过程与报错 | 工作区根目录`制作日志.md` | 已记录LOG-001起的操作、错误与解决办法 |
 | 提交模板草稿 | 工作区`提交材料/赛道三方向2-提交材料草稿-v001.docx`与`work/submission-draft/structural-qa-v001.md` | 结构审计通过；待WPS逐页视觉检查和团队资料 |

@@ -5,7 +5,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {chromium} = await import(pathToFileURL(resolve(process.argv[2])).href);
 const id = process.argv[3];
-const out = resolve('evidence/studio-v040/browser-media');
+const out = resolve('evidence/studio-v042/browser-media');
 await mkdir(out,{recursive:true});
 const browser = await chromium.launch({channel:'msedge',headless:true});
 const errors=[];
@@ -23,6 +23,8 @@ try {
   await page.getByRole('tab',{name:'科普视频',exact:true}).click();
   const video=page.locator('.studio-media video');
   await video.waitFor();
+  const videoSrc=await video.getAttribute('src');
+  assert(videoSrc?.includes('preview-20260901T045502688804Z.mp4'),'page did not select the corrected video revision');
   await video.evaluate(v=>new Promise((resolve,reject)=>{
     if(v.readyState>=1) return resolve();
     v.onloadedmetadata=resolve; v.onerror=()=>reject(new Error('video failed'));
@@ -33,8 +35,6 @@ try {
   await page.waitForTimeout(1000);
   assert(await video.evaluate(v=>v.currentTime)>0);
   await video.evaluate(v=>v.pause());
-  await page.getByText('查看画面检查与自动修改痕迹',{exact:true}).click();
-  assert(await page.locator('.studio-media a', {hasText:'查看候选'}).count()>=6);
   await page.screenshot({path:out+'/video-and-audit.png',fullPage:true});
   const download=await page.request.get(new URL(await page.getByRole('link',{name:'下载MP4',exact:true}).getAttribute('href'),page.url()).href,{headers:{Range:'bytes=0-1023'}});
   assert([200,206].includes(download.status()));
@@ -43,11 +43,14 @@ try {
   const poster=await page.request.get(new URL(await page.locator('.studio-poster img').getAttribute('src'),page.url()).href);
   assert.equal(poster.status(),200);
   assert(poster.headers()['content-type'].startsWith('image/svg+xml'));
+  await page.getByRole('tab',{name:'证据与版本',exact:true}).click();
+  await page.getByText('自动改进留下了什么？',{exact:true}).waitFor();
+  assert(await page.getByText('你的补充建议（选填）',{exact:true}).count()===1);
   await page.getByRole('tab',{name:'科普视频',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.screenshot({path:out+'/mobile.png',fullPage:true});
   assert.deepEqual(errors,[]);
-  await writeFile(out+'/report.json',JSON.stringify({project:id,metadata,errors,paid_actions:0},null,2));
-  console.log(JSON.stringify({project:id,metadata,errors,paid_actions:0}));
+  await writeFile(out+'/report.json',JSON.stringify({project:id,videoSrc,metadata,errors,paid_actions:0},null,2));
+  console.log(JSON.stringify({project:id,videoSrc,metadata,errors,paid_actions:0}));
 } finally {await browser.close();}

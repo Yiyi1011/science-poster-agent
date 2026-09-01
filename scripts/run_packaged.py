@@ -20,7 +20,7 @@ def healthy():
     try:
         with urlopen(URL + "/api/health", timeout=1) as response:
             health = json.load(response)
-        if health.get("service") != "science-poster-agent" or health.get("version") != "0.4.1-preview":
+        if health.get("service") != "science-poster-agent" or health.get("version") != "0.4.2-preview":
             return False
         if health.get("instance") != sha256(str(ROOT).lower().encode()).hexdigest()[:16]:
             return False

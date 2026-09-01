@@ -6,6 +6,7 @@ inputs and model evidence, so it must never be committed or uploaded publicly.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from datetime import datetime
 from hashlib import sha256
 import json
@@ -51,9 +52,10 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="scivis-db-snapshot-") as temporary:
         snapshot = Path(temporary) / "studio.sqlite3"
         if database.exists():
-            with sqlite3.connect(database) as source, sqlite3.connect(snapshot) as target:
+            with closing(sqlite3.connect(database)) as source, closing(sqlite3.connect(snapshot)) as target:
                 source.backup(target)
-            with sqlite3.connect(snapshot) as check:
+                target.commit()
+            with closing(sqlite3.connect(snapshot)) as check:
                 result = check.execute("PRAGMA integrity_check").fetchone()
             if not result or result[0] != "ok":
                 raise RuntimeError("SQLite snapshot integrity check failed")

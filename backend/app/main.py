@@ -50,7 +50,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="Science Poster Agent API",
-    version="0.4.3-preview",
+    version="0.4.4-preview",
     lifespan=lifespan,
     description="Evidence-driven science poster planning API for the competition MVP.",
 )
@@ -65,7 +65,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health() -> dict[str, str | bool]:
-    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.4.3-preview",
+    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.4.4-preview",
             "instance": sha256(str(Path(__file__).resolve().parents[2]).lower().encode()).hexdigest()[:16]}
 
 

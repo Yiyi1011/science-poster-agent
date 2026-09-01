@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", default="0.4.3-preview")
+    parser.add_argument("--version", default="0.4.4-preview")
     parser.add_argument("--channel", choices=["process", "final"], default="process")
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.-]+)?", args.version):

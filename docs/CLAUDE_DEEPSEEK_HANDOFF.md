@@ -11,8 +11,8 @@ Claude和DeepSeek在下一阶段只作为**编程、审查、测试和方案讨�
 | 内容 | 交付方式 |
 |---|---|
 | 私有GitHub仓库 | `https://github.com/Yiyi1011/science-poster-agent.git`，由仓库所有者邀请协作者；不要共享账号密码 |
-| 稳定回退点 | `process/v0.4.3-preview`标签及其commit；从该标签另建分支，不移动旧标签 |
-| 本地源码包与Git历史 | `代码版本备份/制作过程版/scivis-v0.4.3-preview-日期/` |
+| 稳定回退点 | `process/v0.4.4-preview`标签及其commit；从该标签另建分支，不移动旧标签 |
+| 本地源码包与Git历史 | `代码版本备份/制作过程版/scivis-v0.4.4-preview-日期/` |
 | 私有运行数据 | `代码版本备份/私有运行数据/scivis-runtime-日期/`；含项目数据库、媒体和证据，不含`.env`，仅私下传递 |
 | 赛事要求 | 工作区的方向2提交模板、`赛事提交要求验收矩阵.md`及`docs/submission-evidence-index.md` |
 | 架构与文件索引 | `README.md`、`docs/studio-guide.md`、`docs/CODE_MAP.md`、`docs/versions/README.md` |
@@ -40,7 +40,7 @@ Claude和DeepSeek在下一阶段只作为**编程、审查、测试和方案讨�
 强制约束：
 1. 参赛应用运行时只使用阿里云百炼的Qwen系列和赛事允许的官方工具。Claude/DeepSeek仅用于编程和审查，不得接入生产生成链路。
 2. 不读取、打印、提交或上传.env、API Key、AccessKey、Cookie和私人证据。不得把密钥写入代码、提示词或日志。
-3. 不删除或覆盖用户现有作品、SQLite、媒体、证据和Git标签。开始前运行git status；从process/v0.4.3-preview创建新分支。禁止git reset --hard和强制推送。
+3. 不删除或覆盖用户现有作品、SQLite、媒体、证据和Git标签。开始前运行git status；从process/v0.4.4-preview创建新分支。禁止git reset --hard和强制推送。
 4. 付费模型调用前检查evidence/model-usage.jsonl和预算说明；累计实付达到70元立即停止并汇报。不要用重复真实调用代替单元测试。
 5. 每项修改先复现问题，再写测试，再修改，再构建和浏览器验证。失败与人工反馈必须真实留痕，不把AI复检写成专家认证。
 6. 公众表达避免照搬论文术语，但不能把科普压缩成几句口号；需包含是什么、如何工作、例子、边界/误区和可记住的结论。
@@ -92,7 +92,7 @@ Claude负责一个独立功能分支的实现与测试，DeepSeek只审查该分
 
 ## 回退办法
 
-1. 代码回退：在**新的目录**克隆仓库，`git switch -c rollback-test process/v0.4.3-preview`；不要在含未保存修改的工作目录强制切换。
+1. 代码回退：在**新的目录**克隆仓库，`git switch -c rollback-test process/v0.4.4-preview`；不要在含未保存修改的工作目录强制切换。
 2. 无Git时：从制作过程版ZIP解压到新目录，确认`.env`不存在，再按教程配置。
 3. 运行数据回退：先停止应用并给当前数据再做一次备份；将私有运行数据ZIP解压到新目录检查，确认SQLite `PRAGMA integrity_check`为`ok`后再决定是否替换。默认不直接覆盖当前`artifacts/`和`evidence/`。
 4. 恢复后先用Mock在其他端口启动并运行测试；通过后才接入真实百炼配置。

@@ -448,3 +448,53 @@ def test_second_pass_without_mechanism_passages_preserves_gap():
         result = asyncio.run(research.research(client, "为什么重复复习要隔一段时间", lambda _: None))
     assert len(result["sources"]) == 1
     assert result["gap"].startswith("未解释间隔复习")
+
+
+def test_empty_first_selection_gets_one_bounded_partial_support_retry():
+    class Client:
+        def __init__(self): self.purposes = []
+        async def studio_json(self, *args):
+            purpose = args[-1]
+            self.purposes.append(purpose)
+            if purpose == "studio_question_orientation":
+                return {"domain": "general", "answer": "水看起来是什么颜色，既与水本身吸收和散射光有关，也可能受到水中物质和周围环境影响，需要可靠资料核实。",
+                        "queries": ["水 颜色 原因 科普", "why water has different colors science explainer"]}, {}
+            if purpose == "studio_source_selection":
+                return {"sources": [], "gap": "第一轮没有完整机制资料。"}, {}
+            if purpose == "studio_source_selection_recovery":
+                return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"],
+                                      "reason": "原文直接说明水色受水中物质影响"}],
+                        "gap": "该来源只支持可观察因素，未覆盖全部光学机制。"}, {}
+            assert purpose == "studio_source_selection_second_pass"
+            return {"sources": [], "gap": "其余页面没有补充光学机制。"}, {}
+    async def search(*args, **kwargs):
+        return [{"url": "https://www.usgs.gov/example-water-color", "title": "USGS water color"}], {}
+    async def fetch(url):
+        return url, "Water color can vary when dissolved material and suspended particles change how light travels through the water. " * 4
+    client = Client()
+    with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
+        result = asyncio.run(research.research(client, "不同地方水的颜色为什么不一样", lambda _: None))
+    assert "studio_source_selection_recovery" in client.purposes
+    assert len(result["sources"]) == 1
+    assert result["sources"][0]["text"].startswith("Water color can vary")
+
+
+def test_general_water_question_has_verified_readable_entry_points_when_search_is_empty():
+    class Client:
+        async def studio_json(self, *args):
+            purpose = args[-1]
+            if purpose == "studio_question_orientation":
+                return {"domain": "science", "answer": "不同水体会因为水本身和其中物质与光相互作用不同而呈现不同颜色，需要读取权威原文核实。",
+                        "queries": ["水体颜色 原因", "water color causes science"]}, {}
+            return {"sources": [{"page_id": "P1", "passage_ids": ["P1-L001"],
+                                  "reason": "权威科普页面直接解释水体颜色"}], "gap": ""}, {}
+    async def search(*args, **kwargs): return [], {}
+    visited = []
+    async def fetch(url):
+        visited.append(url)
+        return url, "Water color varies because dissolved substances, algae, and suspended sediment change how light behaves in natural water. " * 4
+    with patch.object(research, "search", side_effect=search), patch.object(research, "fetch_page", side_effect=fetch):
+        result = asyncio.run(research.research(Client(), "不同地方水的颜色为什么不一样", lambda _: None))
+    assert "https://oceanservice.noaa.gov/facts/oceanblue.html" in visited
+    assert "https://www.sciencelearn.org.nz/resources/3134-remote-sensing-and-water-quality" in visited
+    assert result["sources"] and result["sources"][0]["url"].startswith("https://oceanservice.noaa.gov/")

@@ -1,7 +1,7 @@
 {
   "name": "science-poster-agent-frontend",
   "private": true,
-  "version": "0.5.1-preview",
+  "version": "0.5.6-preview",
   "type": "module",
   "scripts": {
     "dev": "vite",

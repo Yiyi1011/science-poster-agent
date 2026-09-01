@@ -1,6 +1,6 @@
 # Science Poster Agent / 跨主题科普视频智能体（暂名）
 
-> 当前是**制作过程版**，不是最终交付版。先看[版本导航](docs/versions/README.md)、[代码文件索引](docs/CODE_MAP.md)和[当前变更说明](docs/versions/process/v0.5.1-preview.md)。制作历史与[最终交付区](docs/versions/final/README.md)分开保存，最终版尚未发布。
+> 当前是**制作过程版**，不是最终交付版。先看[版本导航](docs/versions/README.md)、[代码文件索引](docs/CODE_MAP.md)和[当前变更说明](docs/versions/process/v0.5.6-preview.md)。制作历史与[最终交付区](docs/versions/final/README.md)分开保存，最终版尚未发布。
 
 新版工作台**默认生成科普视频，海报选做**：问题→按领域找资料→通俗讲解和6—8镜→检查修订→千问规划卡通对象/动作→视觉检查→AI旁白与字幕→MP4。画风与约60—90秒节奏参考太阳动画，属于程序卡通动画，不是视频大模型原生角色电影。完整讲解、理解小问题、证据和修改对比在次级入口；仍可选择只准备脚本。初步回答不冒充已核实来源；资料不足或审核不过会停止。以下早期清单含太阳专用流程，不代表全部已泛化。
 
@@ -37,7 +37,7 @@
 
 Git历史从2026-08-31首次导入开始，版本说明见`VERSION_NOTES.md`。GitHub私有仓库创建、接手运行、bundle恢复及公网部署门槛见`docs/github-and-handoff.md`；Claude＋DeepSeek继续开发的材料清单和可复制提示词见`docs/CLAUDE_DEEPSEEK_HANDOFF.md`。仓库不包含`.env`、本地数据库、账单或完整原始生成档案；这些资料需在脱敏后另行交接。
 
-以下双击启动器仍有待处理的Windows兼容/等待问题，接手运行优先使用交接文档中的手动启动命令。代码备份不等同已部署公网。
+封装版使用同源单端口；Windows可双击启动，macOS/Linux使用同一个Python入口，也可使用Docker。代码备份不等同已部署公网。
 
 ## 本地运行
 
@@ -119,3 +119,10 @@ npm run dev
 新增独立项目、资料快照、海报/独立分镜、最多两轮千问自动审核修订、前后对比与草稿包导出。使用说明及实际边界见[跨主题工作台](docs/studio-guide.md)。旧太阳动画和分镜仍保留。
 
 封装版有预构建前端时，可运行`python scripts/run_packaged.py`或Windows双击`启动封装版.cmd`，访问`http://127.0.0.1:8000/`。它只需要一个后端服务，不需Vite；不是免安装EXE。请继续遵守下方的环境配置与密钥保护要求。
+
+### 换电脑或换系统
+
+- 通用源码包：安装 Python 3.11+，创建虚拟环境后执行 `pip install -e "./backend[video]"`，再运行 `python scripts/run_packaged.py`。macOS/Linux 建议安装 Noto CJK；也可通过 `SCIVIS_FONT_PATH` 指定中文字体。
+- 容器：`docker build -t scivis .`，然后 `docker run --env-file .env -p 9000:9000 -v scivis-data:/data scivis`；作品数据在命名卷中，重启容器不会丢失。
+- 程序会使用当前操作系统的原生 HTTPS 证书库，并在启动前检查视频依赖、FFmpeg、中文字体、数据目录可写性和百炼配置。不要通过关闭 TLS 校验“修复”网络错误。
+- 每台设备需配置自己的 `.env`，不要复制或上传他人的 Key。如程序目录只读，将 `SCIENCE_POSTER_DATA_DIR` 设为用户可写目录。

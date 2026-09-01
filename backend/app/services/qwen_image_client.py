@@ -109,12 +109,18 @@ class QwenImageClient:
         output_dir.mkdir(parents=True, exist_ok=True)
         path = output_dir / f"{spec.asset_id}-v{spec.version:03d}.png"
         path.write_bytes(image_response.content)
+        try:
+            stored_path = path.relative_to(Path(__file__).resolve().parents[3])
+        except ValueError:
+            # An external SCIENCE_POSTER_DATA_DIR is intentionally allowed for
+            # containers and read-only application folders.
+            stored_path = path
         updated = spec.model_copy(
             update={
                 "status": "needs_review",
                 "provider": "Alibaba Cloud Model Studio",
                 "model": self.settings.qwen_image_model,
-                "file_path": str(path.relative_to(Path(__file__).resolve().parents[3])).replace("\\", "/"),
+                "file_path": str(stored_path).replace("\\", "/"),
             }
         )
         result = ImageGenerationResult(

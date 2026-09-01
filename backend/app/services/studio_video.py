@@ -17,7 +17,10 @@ W, H, FPS = 1280, 720, 12
 
 def find_font():
     candidates = [os.getenv("SCIVIS_FONT_PATH", ""), "C:/Windows/Fonts/msyh.ttc",
-                  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"]
+                  "/System/Library/Fonts/PingFang.ttc",
+                  "/System/Library/Fonts/STHeiti Medium.ttc",
+                  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                  "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf"]
     for candidate in candidates:
         if candidate and Path(candidate).is_file():
             return candidate

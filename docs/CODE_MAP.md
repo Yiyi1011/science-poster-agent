@@ -107,6 +107,7 @@
 | [scripts/qa_storyboard_editor_live.mjs](../scripts/qa_storyboard_editor_live.mjs) | 太阳编辑器实际服务测试 |
 | [scripts/qa_storyboard_automatic_flow.mjs](../scripts/qa_storyboard_automatic_flow.mjs) | 检查太阳自动处理流程 |
 | [scripts/qa_storyboard_autocorrection.mjs](../scripts/qa_storyboard_autocorrection.mjs) | 检查太阳自动修正及前后对比 |
+| [scripts/qa_studio_layout_v056.mjs](../scripts/qa_studio_layout_v056.mjs) | 只读检查真实成片播放/下载、证据、桌面/手机布局与提示框对比度 |
 
 ## 启动、配置、打包
 
@@ -124,7 +125,7 @@
 | [docs/CLAUDE_DEEPSEEK_HANDOFF.md](CLAUDE_DEEPSEEK_HANDOFF.md) | Claude主开发与DeepSeek独立审查的材料清单、可复制提示词、模型/预算红线和回退步骤 |
 | [docs/NEXT_STAGE_EXECUTION_BRIEF.md](NEXT_STAGE_EXECUTION_BRIEF.md) | 下一阶段唯一任务入口；规定任意问题到视频、UI优化和封装三个里程碑，以及各模块修改与成果存放位置 |
 | [scripts/audit_repository.py](../scripts/audit_repository.py) | 上传前检查敏感文件和疑似密钥，不输出密钥原文 |
-| [Dockerfile](../Dockerfile) | 容器构建定义，不代表已公网部署 |
+| [Dockerfile](../Dockerfile) | 跨平台容器候选：包含视频依赖、Noto CJK、系统CA、非root运行和`/data`持久卷；不代表已公网部署 |
 | [.env.example](../.env.example) | 配置示例；真实密钥只能放本机`.env` |
 | [backend/pyproject.toml](../backend/pyproject.toml) | Python版本、依赖和测试配置 |
 | [frontend/package.json](../frontend/package.json) / [package-lock.json](../frontend/package-lock.json) | 前端脚本和锁定依赖 |

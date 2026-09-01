@@ -86,11 +86,15 @@ class QwenTtsClient:
             character_count=character_count,
             duration_seconds=duration,
         )
+        try:
+            stored_path = path.relative_to(PROJECT_ROOT)
+        except ValueError:
+            stored_path = path
         result = TtsGenerationResult(
             scene_id=scene.scene_id,
             model=self.settings.qwen_tts_model,
             voice=self.settings.qwen_tts_voice,
-            file_path=str(path.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+            file_path=str(stored_path).replace("\\", "/"),
             character_count=character_count,
             duration_seconds=round(duration, 3),
             estimated_cost_cny=cost,

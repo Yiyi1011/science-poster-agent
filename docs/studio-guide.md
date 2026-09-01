@@ -58,9 +58,9 @@
 
 本机可双击`启动封装版.cmd`。启动器优先使用项目的`backend/.venv`，先检查依赖、FFmpeg、中文字体、真实模式下的百炼配置，再启动服务；等待时会持续保留状态窗口。它会复用同一目录的健康实例，不会重复启动，也不会盲目结束占用端口的其它进程。出错时保留可读提示，服务日志位于`.local-logs/packaged.*.log`。
 
-这是“预构建前端＋Python后端”的本地包，**不是免安装EXE**。新电脑仍需Python 3.11+及后端依赖：先在项目根目录创建`.venv`，安装`backend[dev,video]`；按交接教程创建自己的`.env`，建议先Mock。包里不含别人的Key、数据库、原始视频素材或云端知识库。
+这是“预构建前端＋Python后端”的本地包，**不是免安装EXE**。新电脑仍需Python 3.11+及后端依赖：先在项目根目录创建`.venv`，安装`backend[dev,video]`；按交接教程创建自己的`.env`，建议先Mock。macOS/Linux可直接运行`python scripts/run_packaged.py`；或根据README使用Docker。包里不含别人的Key、数据库、原始视频素材或云端知识库。
 
-当前仅支持单个后端worker。不要增加`--workers`，因为启动恢复和任务队列按单进程设计。数据库默认在`artifacts/studio.sqlite3`；设置`SCIENCE_POSTER_DATA_DIR`可更改数据库位置，但媒体当前仍在仓库`artifacts/studio-media`。云端须同时持久化这些内容，完成鉴权限流后才能上线，不能把临时目录当唯一副本。
+当前仅支持单个后端worker。不要增加`--workers`，因为启动恢复和任务队列按单进程设计。数据库默认在`artifacts/studio.sqlite3`；设置`SCIENCE_POSTER_DATA_DIR`后，SQLite、媒体、字幕和运行清单会统一保存到该目录。Docker默认使用`/data`，需挂载持久卷。云端完成鉴权限流后才能上线，不能把临时目录当唯一副本。
 
 ## 提交前仍需完成
 

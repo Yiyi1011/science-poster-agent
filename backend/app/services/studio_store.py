@@ -14,9 +14,15 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def data_root():
+    """Single portable home for the database and generated media."""
+    configured = os.getenv("SCIENCE_POSTER_DATA_DIR", "").strip()
+    return Path(configured).expanduser() if configured else Path(__file__).resolve().parents[3] / "artifacts"
+
+
 @contextmanager
 def connection():
-    root = Path(os.getenv("SCIENCE_POSTER_DATA_DIR") or Path(__file__).resolve().parents[3] / "artifacts")
+    root = data_root()
     root.mkdir(parents=True, exist_ok=True)
     # WPS cloud sync can hold transient file locks on this folder; WAL plus a
     # longer busy timeout keeps brief sync bursts from aborting media jobs.

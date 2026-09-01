@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from app.config import settings
 from app.studio_models import ProjectInput, Source, StudioDraft, RunInput
-from app.services import studio_pipeline as pipeline, studio_store as store
+from app.services import studio_media, studio_pipeline as pipeline, studio_store as store
 from app.services import studio_research as research
 from app.services.public_poster import wrap, render
 from app.services.studio_export import poster_svg
@@ -27,6 +27,12 @@ def isolated(tmp_path, monkeypatch):
 
 def data():
     return ProjectInput(topic="科学问题", sources=[Source(source_id="S1", title="测试资料", text="这是一段用于验证数据结构的资料，只有在对应条件成立时才能应用结论。")])
+
+
+def test_database_and_media_share_the_configured_portable_data_root(tmp_path):
+    project_id, job_id = uuid4(), uuid4()
+    assert store.data_root() == tmp_path
+    assert studio_media.directory(str(project_id), str(job_id)) == tmp_path / "studio-media" / str(project_id) / str(job_id)
 
 
 def test_legacy_three_scene_versions_remain_readable():
@@ -99,7 +105,9 @@ def test_reversed_english_sentences_are_restored_to_source_order():
 
 
 @pytest.mark.parametrize("url", ["https://openstax.org/books/psychology/pages/1-introduction",
-                                  "https://www.apa.org/topics/learning-memory"])
+                                  "https://www.apa.org/topics/learning-memory",
+                                  "https://www.britannica.com/science/water",
+                                  "https://www.sciencelearn.org.nz/resources/100-water"])
 def test_vetted_education_and_professional_sources_are_allowed(url):
     assert research.safe_public_url(url) == url
 
@@ -148,6 +156,12 @@ def test_research_rejects_unapproved_urls(url):
 
 def test_research_allows_real_subdomains_and_removes_fragment():
     assert research.safe_public_url("https://science.nasa.gov/moon/#phase") == "https://science.nasa.gov/moon/"
+
+
+def test_public_fetch_uses_native_system_trust_instead_of_disabling_tls():
+    context = research.trusted_ssl_context()
+    assert context.verify_mode == research.ssl.CERT_REQUIRED
+    assert context.check_hostname is True
 
 
 def test_dns_rejects_private_addresses():

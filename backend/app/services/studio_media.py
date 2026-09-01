@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def directory(project_id, job_id):
     from uuid import UUID
-    return ROOT / "artifacts" / "studio-media" / str(UUID(project_id)) / str(UUID(job_id))
+    return store.data_root() / "studio-media" / str(UUID(project_id)) / str(UUID(job_id))
 
 
 class VisualCheck(StrictModel):

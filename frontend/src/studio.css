@@ -34,3 +34,17 @@
 .studio-saved-open:hover{color:#176d75}
 .studio-trash{flex:none;padding:5px 8px;border-radius:9px;font-size:13px;line-height:1;background:#fff;color:#c0655a;border-color:#efd9d2}
 .studio-trash:hover:not(:disabled){background:#fbeee9}
+.studio-grid,.studio-input,.studio-results,.studio-saved-list,.studio-saved-list>section,.studio-saved-row{min-width:0}
+.studio-input,.studio-results,.studio-saved-list,.studio-saved-list>section,.studio-saved-row{max-width:100%}
+
+/* Use one document scroll on wide screens. The input stays available without
+   trapping the finished work inside a second, narrow scrollbar. */
+@media(min-width:901px){
+  .studio-input{position:sticky;top:18px}
+  .studio-results{position:static;overflow:hidden}
+  .studio-scroll{max-height:none;min-height:520px;overflow:visible;scrollbar-gutter:auto;overscroll-behavior:auto}
+}
+@media(max-width:900px){
+  .studio-input{position:static}
+  .studio-scroll{max-height:none;min-height:420px;overflow:visible}
+}

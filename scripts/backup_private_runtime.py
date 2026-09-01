@@ -10,6 +10,7 @@ from contextlib import closing
 from datetime import datetime
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -47,7 +48,8 @@ def main() -> None:
     folder = args.output_root.resolve() / f"scivis-runtime-{stamp}"
     folder.mkdir(parents=True, exist_ok=False)
     archive = folder / f"scivis-private-runtime-{stamp}.zip"
-    database = ROOT / "artifacts" / "studio.sqlite3"
+    runtime_root = Path(os.getenv("SCIENCE_POSTER_DATA_DIR", "").strip() or ROOT / "artifacts").expanduser().resolve()
+    database = runtime_root / "studio.sqlite3"
     file_count = 0
     with tempfile.TemporaryDirectory(prefix="scivis-db-snapshot-") as temporary:
         snapshot = Path(temporary) / "studio.sqlite3"
@@ -61,7 +63,7 @@ def main() -> None:
                 raise RuntimeError("SQLite snapshot integrity check failed")
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as package:
             skip = {database.resolve()} if database.exists() else set()
-            file_count += add_tree(package, ROOT / "artifacts", "science-poster-agent-private/artifacts", skip)
+            file_count += add_tree(package, runtime_root, "science-poster-agent-private/artifacts", skip)
             file_count += add_tree(package, ROOT / "evidence", "science-poster-agent-private/evidence", set())
             if snapshot.exists():
                 package.write(snapshot, "science-poster-agent-private/artifacts/studio.sqlite3")

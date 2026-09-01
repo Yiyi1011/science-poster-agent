@@ -15,6 +15,10 @@
 .studio-media small{display:block;margin-top:12px;line-height:1.7}
 .studio-media a{color:#9be5d7}
 .studio-media button{white-space:normal;text-align:left}
+.studio-media .studio-error{background:#fff0e9;color:#8d2f18!important;border:1px solid #f0c2b4}
+.studio-media .studio-error *{color:#8d2f18!important}
+.studio-media .studio-error button{color:#164451!important;background:#fff;border-color:#d8b6aa}
+.studio-media .studio-error small{color:#704e45!important}
 .studio-downloads{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:16px 0 4px}
 .studio-download{display:inline-block;background:#ed653c;color:#fff!important;border-radius:12px;padding:11px 18px;font-weight:650;text-decoration:none}
 .studio-download:hover{background:#cf4e28}

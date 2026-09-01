@@ -6,6 +6,7 @@
 |---|---|---|
 | v0.5.1只提问题→自动补证据→直接视频 | `docs/versions/process/v0.5.1-preview.md`、`制作日志.md`、Token项目私有manifest与`evidence/studio-v050/browser-media/3a6ee81f-*/report.json` | 用户未提供论文；千问自动读取IBM/RFC并逐字定位，v13自动进入6镜68秒制片；音轨、12个完整句字幕、三帧、浏览器播放/下载通过。仍须人工科学终审 |
 | 可恢复清理与Windows封装候选 | `scripts/manage_project_archive.py`、`scripts/backup_private_runtime.py`、`scripts/launch-packaged.ps1`、`scripts/run_packaged.py`、私有备份manifest | 先备份后归档20个重复/失败项目，选择器保留6个代表项目；不物理删除。启动器识别backend venv并预检依赖、FFmpeg、字体和百炼配置；不是免安装EXE |
+| v0.5.6权威资料恢复、水色成片与跨设备候选 | `docs/versions/process/v0.5.6-preview.md`、`evidence/studio-v056/browser-final-acceptance/report.json`、水色项目私有manifest、`Dockerfile` | 从0来源恢复到NOAA+大学科普2份原文；7镜68秒、音轨、15个完整句字幕、3帧抽样、浏览器播放/下载、390px布局通过。容器尚待有Docker的目标环境实际构建 |
 | v0.5通用闭环四题端到端 | `docs/versions/process/v0.5.0-preview.md`、`制作日志.md`、`scripts/run_studio_acceptance.py`、`artifacts/studio-media/`四项目MP4 | 月亮8镜90.64秒、间隔学习7镜68秒（第5镜视觉拒绝→双向箭头渲染修复→重试成功）、AI题68秒复核、API题8镜68秒一次通过；各自`verify_media_output`复验OK；内容仍须人工试听与科学终审 |
 | v0.5 JSON加固与确定性降级 | `backend/app/services/studio_structured_output.py`、`studio_fallback.py`、`tests/test_studio_v05.py` | 拒绝多义JSON、仅安全修复格式、fallback明确标记不冒充模型规划；媒体完整性含垃圾文件回退 |
 | v0.4.4私有备份可恢复性 | `docs/versions/process/v0.4.4-preview.md`、`scripts/backup_private_runtime.py`、本机通过版manifest | 首次Windows临时文件占用失败已显式标记；修复要求连接关闭、SQLite完整性、无`.env`、SHA256和解压复核均通过才可交接 |

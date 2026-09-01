@@ -14,7 +14,7 @@ from hashlib import sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 URL = "http://127.0.0.1:8000"
-APP_VERSION = "0.5.1-preview"
+APP_VERSION = "0.5.6-preview"
 
 
 def healthy():
@@ -34,7 +34,7 @@ def healthy():
 def preflight() -> None:
     """Fail before background launch with a readable, secret-free diagnosis."""
     missing = []
-    for module in ("uvicorn", "fastapi", "PIL", "imageio_ffmpeg"):
+    for module in ("uvicorn", "fastapi", "PIL", "imageio_ffmpeg", "truststore"):
         try:
             __import__(module)
         except ImportError:
@@ -48,9 +48,20 @@ def preflight() -> None:
     configured_font = os.getenv("SCIVIS_FONT_PATH", "").strip()
     fonts = [Path(configured_font)] if configured_font else []
     fonts.extend([Path("C:/Windows/Fonts/msyh.ttc"),
-                  Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")])
+                  Path("/System/Library/Fonts/PingFang.ttc"),
+                  Path("/System/Library/Fonts/STHeiti Medium.ttc"),
+                  Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+                  Path("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf")])
     if not any(path.is_file() for path in fonts):
         raise SystemExit("Chinese font missing; install Microsoft YaHei/Noto CJK or set SCIVIS_FONT_PATH.")
+    data_root = Path(os.getenv("SCIENCE_POSTER_DATA_DIR", "").strip() or ROOT / "artifacts").expanduser()
+    try:
+        data_root.mkdir(parents=True, exist_ok=True)
+        probe = data_root / ".scivis-write-test"
+        probe.write_text("ok", encoding="ascii")
+        probe.unlink()
+    except OSError as exc:
+        raise SystemExit(f"Data directory is not writable: {data_root} ({exc})") from None
     sys.path.insert(0, str(ROOT / "backend"))
     from app.config import settings
     if not settings.mock_ai:

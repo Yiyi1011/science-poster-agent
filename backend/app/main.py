@@ -53,7 +53,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="Science Poster Agent API",
-    version="0.5.8-preview",
+    version="0.5.9-preview",
     lifespan=lifespan,
     description="Evidence-driven science poster planning API for the competition MVP.",
 )
@@ -87,7 +87,7 @@ async def anonymous_public_session(request: Request, call_next):
 
 @app.get("/api/health")
 async def health() -> dict[str, str | bool]:
-    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.5.8-preview",
+    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.5.9-preview",
             "instance": sha256(str(Path(__file__).resolve().parents[2]).lower().encode()).hexdigest()[:16]}
 
 

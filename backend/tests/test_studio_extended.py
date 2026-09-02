@@ -416,6 +416,49 @@ def test_cartoon_composition_has_video_and_subtitles_but_no_default_poster(tmp_p
     assert lines[-1].endswith("00:00:01,500")
 
 
+def test_direct_cartoon_uses_saved_storyboard_without_replanning(tmp_path, monkeypatch):
+    from app.services import studio_cartoon as cartoon, studio_media as media, studio_video as video
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from PIL import Image
+    p = project()
+    request = MediaInput(request_id=uuid4(), expected_version=1, renderer="cartoon")
+    assert store.reserve_media(p["id"], request)
+    monkeypatch.setattr(media, "ROOT", tmp_path)
+    monkeypatch.setattr(media, "directory", lambda _project, job: tmp_path / job)
+    monkeypatch.setattr(cartoon, "settings", replace(cartoon.settings, mock_ai=False,
+                                                     dashscope_api_key="test-not-real"))
+    monkeypatch.setattr(video, "find_font", lambda: "test-font")
+    monkeypatch.setattr(cartoon, "frame", lambda *_args, **_kwargs: Image.new("RGB", (1280, 720), "#08252f"))
+    calls = []
+    async def voice(_self, scene, folder):
+        calls.append(scene.scene_id)
+        target = folder / f"voice-{len(calls)}.wav"
+        with wave.open(str(target), "wb") as wav:
+            wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(24000)
+            wav.writeframes(b"\0\0" * 6000)
+        return SimpleNamespace(file_path=str(target.relative_to(tmp_path)), duration_seconds=.25,
+                               model="qwen-test-tts", request_id=f"tts-{len(calls)}")
+    monkeypatch.setattr(cartoon.QwenTtsClient, "generate", voice)
+    async def forbidden(*_args, **_kwargs):
+        raise AssertionError("Existing storyboard must not be replanned or visually regenerated")
+    monkeypatch.setattr(cartoon.QwenClient, "studio_json", forbidden)
+    monkeypatch.setattr(media, "inspect_image", forbidden)
+    def compose(draft, images, audio, folder, cartoon_plans=None, planning_label=""):
+        assert len(images) == len(audio) == len(cartoon_plans) == len(draft.scenes)
+        assert planning_label == "已有分镜"
+        (folder / "preview.mp4").write_bytes(b"video")
+        (folder / "subtitles.srt").write_text("subtitle", encoding="utf-8")
+        return {"video": "preview.mp4", "subtitles": "subtitles.srt", "fps": 12}
+    monkeypatch.setattr(video, "compose", compose)
+    monkeypatch.setattr(video, "verify_media_output", lambda _folder: {"status": "ok", "sample_frames": []})
+    asyncio.run(cartoon.execute_cartoon(p["id"], request))
+    result = store.get_project(p["id"])["media"][-1]
+    assert result["state"] == "succeeded"
+    assert result["planning_calls"] == []
+    assert len(calls) == len(p["versions"][0]["draft"]["scenes"])
+
+
 def test_video_captions_keep_complete_sentences_and_merge_short_tail():
     from app.services.studio_video import complete_sentence_captions
     text="AI像人说话，是因为学了大量人类语言。但这只是常见组合方式，并不保证内容正确。"

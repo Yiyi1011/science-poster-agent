@@ -7,6 +7,7 @@ import asyncio
 import copy
 from dataclasses import replace
 import json
+import logging
 import math
 import shutil
 from functools import lru_cache
@@ -25,6 +26,9 @@ from app.services.qwen_client import QwenClient
 from app.services.qwen_tts_client import QwenTtsClient
 from app.services.model_policy import guard_text_budget
 from app.services.studio_fallback import deterministic_cartoon_plan
+
+
+logger = logging.getLogger(__name__)
 
 
 class Actor(StrictModel):
@@ -171,6 +175,102 @@ def frame(plan, phase, heading=""):
 
 
 async def execute_cartoon(project_id, request):
+    """Build directly from the saved storyboard; only missing voices call Qwen TTS."""
+    from app.services.studio_media import directory, ROOT
+    from app.services.studio_video import compose, find_font, verify_media_output
+    project = store.get_project(project_id)
+    job = next(m for m in project["media"] if m["id"] == str(request.request_id))
+    folder = directory(project_id, job["id"])
+
+    def stage(label, state="running"):
+        job.update(stage=label, state=state)
+        job["events"].append({"at": store.now(), "stage": label})
+        store.save_media(project_id, job)
+
+    try:
+        async with _model_lock:
+            find_font()
+            settings.validate_for_real_ai()
+            if settings.mock_ai:
+                raise ValueError("Mock does not generate paid video")
+            draft = StudioDraft.model_validate(next(
+                v for v in project["versions"] if v["version"] == job["version"])["draft"])
+            folder.mkdir(parents=True, exist_ok=False)
+            plan = deterministic_cartoon_plan(draft)
+            job["planning_fallback"] = "按用户设置直接使用已有分镜；程序生成关键画面，不再重新规划或二次检索"
+            job["planning_calls"] = []
+            previous = [m for m in project["media"]
+                        if m["version"] == job["version"] and m["id"] != job["id"]]
+            images, audio, adopted = [], [], []
+            for index, (scene, art) in enumerate(zip(draft.scenes, plan.scenes, strict=True)):
+                stage(f"第{index + 1}/{len(plan.scenes)}镜：直接生成已有分镜关键画面")
+                path = folder / f"storyboard-s{index + 1}.png"
+                image = frame(art, .65, scene.heading)
+                try:
+                    image.save(path)
+                finally:
+                    image.close()
+                candidate = {"file": path.name, "attempt": 1, "correction": "",
+                             "plan": art.model_dump(), "planning_call": None,
+                             "model": "program-cartoon (saved-storyboard)", "review": None}
+                entry = {"scene_id": scene.scene_id, "candidates": [candidate],
+                         "accepted": path.name, "voice": None}
+                job["scenes"].append(entry)
+                job["files"].append(path.name)
+                images.append(path)
+                adopted.append(art.model_dump())
+
+                reused = next(((m, saved) for m in reversed(previous)
+                               for saved in m.get("scenes", [])
+                               if saved.get("scene_id") == scene.scene_id and saved.get("voice")), None)
+                target = None
+                if reused:
+                    old_job, saved = reused
+                    name = saved["voice"]["file"]
+                    source = directory(project_id, old_job["id"]) / name
+                    if name in old_job.get("files", []) and source.is_file() and source.name == name:
+                        target = folder / name
+                        shutil.copy2(source, target)
+                        entry["voice"] = {**copy.deepcopy(saved["voice"]), "reused_from": old_job["id"]}
+                if target is None:
+                    stage(f"第{index + 1}/{len(plan.scenes)}镜：补充AI旁白")
+                    guard_text_budget(settings, .5)
+                    voice = await QwenTtsClient(settings).generate(VideoScene(
+                        scene_id=f"{job['id']}-voice-{index + 1}", duration_seconds=30,
+                        heading=scene.heading, narration=scene.narration,
+                        subtitle=scene.narration, visual_prompt=scene.visual_action), folder)
+                    target = ROOT / voice.file_path
+                    entry["voice"] = {"file": target.name, "duration": voice.duration_seconds,
+                                      "model": voice.model, "request_id": voice.request_id}
+                audio.append(target)
+                job["files"].append(target.name)
+                store.save_media(project_id, job)
+
+            stage("使用已有分镜和旁白低内存合成MP4")
+            result = await asyncio.to_thread(compose, draft, images, audio, folder,
+                                             cartoon_plans=adopted,
+                                             planning_label="已有分镜")
+            job.update(result)
+            job["files"].extend(["preview.mp4", "subtitles.srt", "manifest.json"])
+            integrity = await asyncio.to_thread(verify_media_output, folder)
+            job["media_integrity_check"] = integrity
+            job["files"].extend(integrity.get("sample_frames", []))
+            if integrity["status"] != "ok":
+                stage(f"视频完整性检查未通过（{integrity.get('error', '未知')}），素材保留；检查后可重试", "failed")
+            else:
+                stage("已有分镜已成功制作成卡通科普视频", "succeeded")
+            (folder / "manifest.json").write_text(
+                json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+    except asyncio.CancelledError:
+        stage("任务中断，素材保留；不会自动重复收费", "failed")
+        raise
+    except Exception as exc:
+        job["failure_stage"] = job.get("stage", "未知阶段")
+        logger.exception("Direct storyboard video failed at %s", job["failure_stage"])
+        stage(f"已有分镜制片未完成（{type(exc).__name__}），素材保留，可检查后重试", "failed")
+
+
+async def _execute_cartoon_reviewed(project_id, request):
     from app.services.studio_media import directory, inspect_image, ROOT
     from app.services.studio_video import compose, find_font, verify_media_output
     project=store.get_project(project_id)

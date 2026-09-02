@@ -137,6 +137,76 @@ def illustrated_poster(draft, image, target, font_path):
     canvas.crop((0, 0, 1080, y + 50)).save(target)
 
 
+def _captioned_slide(source_path, target, caption, seconds, total, subtitle_font, small_font):
+    """Render one still per subtitle interval instead of hundreds of Python frames."""
+    with Image.open(source_path) as source:
+        source = source.convert("RGB")
+        if source.size == (W, H):
+            canvas = source.copy()
+        else:
+            art = ImageOps.contain(source, (W, H))
+            canvas = Image.new("RGB", (W, H), "#08252f")
+            canvas.paste(art, ((W - art.width) // 2, (H - art.height) // 2))
+    try:
+        draw = ImageDraw.Draw(canvas)
+        caption_lines = wrap_pixels(caption, subtitle_font, W - 140)
+        line_height = subtitle_font.size + 9
+        box_height = max(87, len(caption_lines) * line_height + 28)
+        box_top, box_bottom = 685 - box_height, 685
+        draw.rounded_rectangle((42, box_top, W - 42, box_bottom), radius=16, fill="#174550")
+        text_y = box_top + (box_height - len(caption_lines) * line_height) / 2
+        for line in caption_lines:
+            draw.text(((W - subtitle_font.getlength(line)) / 2, text_y), line,
+                      font=subtitle_font, fill="white")
+            text_y += line_height
+        draw.rectangle((0, H - 6, W * seconds / total, H), fill="#ffda83")
+        draw.text((44, 689), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
+        canvas.save(target)
+    finally:
+        canvas.close()
+
+
+def _encode_cartoon_slides(image_paths, captions, end_times, total, folder, subtitle_font, small_font):
+    intervals = []
+    scene_start = 0.0
+    for scene_index, scene_end in enumerate(end_times):
+        position = scene_start
+        scene_captions = [(start, end, text) for start, end, text in captions
+                          if start >= scene_start - 1e-6 and end <= scene_end + 1e-6]
+        for start, end, text in scene_captions:
+            if start > position + 0.001:
+                intervals.append((scene_index, position, start, ""))
+            intervals.append((scene_index, start, end, text))
+            position = end
+        if scene_end > position + 0.001:
+            intervals.append((scene_index, position, scene_end, ""))
+        scene_start = scene_end
+    if not intervals:
+        raise ValueError("No video intervals")
+    slides = []
+    for index, (scene_index, start, end, caption) in enumerate(intervals, 1):
+        path = folder / f"compose-slide-{index:03}.png"
+        _captioned_slide(image_paths[scene_index], path, caption, (start + end) / 2,
+                         total, subtitle_font, small_font)
+        slides.append((path, end - start))
+    concat = folder / "compose-slides.ffconcat"
+    lines = ["ffconcat version 1.0"]
+    for path, duration in slides:
+        lines.extend((f"file '{path.name}'", f"duration {duration:.6f}"))
+    lines.append(f"file '{slides[-1][0].name}'")
+    concat.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    command = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
+        "-f", "concat", "-safe", "0", "-i", str(concat), "-i", str(folder / "combined.wav"),
+        "-vf", f"fps={FPS},format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
+        "-tune", "stillimage", "-threads", "1", "-crf", "23", "-c:a", "aac",
+        "-shortest", "-movflags", "+faststart", str(folder / "preview.mp4")]
+    with (folder / "compose.log").open("wb") as log:
+        result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=log,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode != 0:
+        raise RuntimeError("Video encoding failed")
+
+
 def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, planning_label="千问规划"):
     if len(image_paths) != len(draft.scenes) or len(audio_paths) != len(draft.scenes):
         raise ValueError("Every scene requires an approved illustration and voice")
@@ -168,6 +238,12 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, plannin
     (folder / "subtitles.srt").write_text("\n".join(subtitles), encoding="utf-8")
     if not cartoon_plans:
         illustrated_poster(draft, images[0], folder / "poster.png", font_path)
+    else:
+        _encode_cartoon_slides(image_paths, captions, end_times, cursor, folder,
+                               subtitle_font, small_font)
+        return {"duration_seconds": round(cursor, 3), "resolution": [W, H], "fps": fps,
+                "video": "preview.mp4", "subtitles": "subtitles.srt",
+                "timing_note": "逐镜采用真实配音时长；现有分镜按完整句字幕生成低内存关键帧并合成为视频"}
     command = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
         "-s", f"{W}x{H}", "-r", str(fps), "-i", "pipe:0", "-i", str(folder / "combined.wav"),
         "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-threads", "1",

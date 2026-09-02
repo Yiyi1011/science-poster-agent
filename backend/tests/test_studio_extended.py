@@ -267,8 +267,8 @@ def test_media_retry_reuses_completed_assets_without_paid_calls(tmp_path, monkey
     assert result["media"][0]["state"] == "failed"
 
 
-@pytest.mark.parametrize("make_video,mock,state,expected", [(True,False,"succeeded",1), (False,False,"succeeded",0), (True,True,"succeeded",0), (True,False,"blocked",0), (True,False,"failed",0)])
-def test_automatic_video_only_after_successful_real_review(monkeypatch, make_video, mock, state, expected):
+@pytest.mark.parametrize("make_video,mock,state,expected", [(True,False,"succeeded",1), (False,False,"succeeded",0), (True,True,"succeeded",0), (True,False,"blocked",1), (True,False,"failed",0)])
+def test_automatic_video_uses_available_script_after_real_run(monkeypatch, make_video, mock, state, expected):
     from app import studio_routes as routes
     from app.services import studio_media as media
     from dataclasses import replace
@@ -286,6 +286,29 @@ def test_automatic_video_only_after_successful_real_review(monkeypatch, make_vid
         assert calls[0].renderer == "cartoon" and calls[0].expected_version == 1
         asyncio.run(routes.execute_with_video(p["id"], request))
         assert len(calls) == 1  # Same run cannot create a second paid media request.
+
+
+def test_first_blocked_script_defaults_to_direct_cartoon_generation(monkeypatch):
+    from app import studio_routes as routes
+    from app.services import studio_media as media
+    from dataclasses import replace
+    data = ProjectInput(topic="首次检索后默认制片", sources=[Source(
+        source_id="S1", title="测试原文", text="这是一份足够长的测试原文，用于验证已有分镜会默认直接进入视频制作。")])
+    created = store.create_project(data)
+    store.append_version(created["id"], {"mode": "bailian", "review_status": "blocked",
+        "draft": pipeline.mock_draft(data).model_dump()})
+    request = RunInput(request_id=uuid4(), expected_version=1, make_video=True)
+    store.reserve(created["id"], request)
+    async def reviewed(pid, run): store.stage(run.request_id, "保留分镜并直接制片", "blocked")
+    calls = []
+    async def rendered(pid, media_request): calls.append(media_request)
+    monkeypatch.setattr(routes, "execute", reviewed)
+    monkeypatch.setattr(routes, "settings", replace(routes.settings, mock_ai=False))
+    monkeypatch.setattr(media, "execute_media", rendered)
+    asyncio.run(routes.execute_with_video(created["id"], request))
+    assert len(calls) == 1
+    assert calls[0].expected_version == 1
+    assert calls[0].proceed_from_blocked is True
 
 
 def test_cartoon_objects_really_move_and_reject_unsupported_icons():
@@ -384,7 +407,7 @@ def test_cartoon_composition_has_video_and_subtitles_but_no_default_poster(tmp_p
         {"icon":"book","label":"资料","explanation":"先查看已有的证据"},
         {"icon":"person","label":"公众","explanation":"再解释知识的含义"}]} for s in draft.scenes]
     result=video.compose(draft,[image]*6,[voice]*6,tmp_path,cartoon_plans=plans)
-    assert result["fps"] == 20 and result["duration_seconds"] == 1.5
+    assert result["fps"] == 12 and result["duration_seconds"] == 1.5
     assert "poster" not in result and not (tmp_path/"poster.png").exists()
     assert (tmp_path/"preview.mp4").stat().st_size > 1000
     subtitles=(tmp_path/"subtitles.srt").read_text(encoding="utf-8")

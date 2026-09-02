@@ -79,7 +79,7 @@ def test_signed_query_preserves_session_for_media_links(monkeypatch):
 def test_public_project_quota_is_transparent_and_atomic(monkeypatch):
     from app import main, studio_routes
     configured = replace(settings, public_access_enabled=True, public_session_secret="q" * 32,
-                         public_projects_per_day=1)
+                         public_usage_limits_enabled=True, public_projects_per_day=1)
     monkeypatch.setattr(main, "settings", configured)
     monkeypatch.setattr(studio_routes, "settings", configured)
     with TestClient(app) as client:
@@ -88,6 +88,19 @@ def test_public_project_quota_is_transparent_and_atomic(monkeypatch):
         assert blocked.status_code == 429
         assert "已有项目和视频不会丢失" in blocked.json()["detail"]
         assert len(store.list_projects()) == 1
+
+
+def test_zero_public_quota_disables_usage_counter(monkeypatch):
+    from app import main, studio_routes
+    configured = replace(settings, public_access_enabled=True, public_session_secret="u" * 32,
+                         public_usage_limits_enabled=False, public_projects_per_day=1,
+                         public_runs_per_hour=1, public_media_per_hour=1)
+    monkeypatch.setattr(main, "settings", configured)
+    monkeypatch.setattr(studio_routes, "settings", configured)
+    with TestClient(app) as client:
+        assert client.post("/api/studio/projects", json=payload("不限次数项目一")).status_code == 201
+        assert client.post("/api/studio/projects", json=payload("不限次数项目二")).status_code == 201
+        assert len(store.list_projects()) == 2
 
 
 def test_run_quota_and_request_reservation_are_one_transaction():

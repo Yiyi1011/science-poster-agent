@@ -2,7 +2,7 @@
 
 状态：公网零配置发布候选已准备，尚未创建任何计费云资源。
 
-2026-09-02更新：最终用户入口改为同源公网Web应用。匿名浏览器会自动获得签名会话，项目彼此隔离；创建、审核和制片有透明额度，全局生成队列受控；旧版付费接口在公网模式关闭。最终用户无需账号、API Key、`.env`或本地安装。百炼Key和会话签名密钥只配置在FC环境变量中。
+2026-09-02更新：最终用户入口改为公网Web应用。匿名浏览器会自动获得签名会话，项目彼此隔离；按当前发布要求取消创建、审核和制片的次数额度，全局生成队列仍受控；旧版付费接口在公网模式关闭。最终用户无需账号、API Key、`.env`或本地安装。百炼Key和会话签名密钥只配置在FC环境变量中。
 
 这仍是发布候选清单：价格和试用资格须以部署当天控制台为准。创建云资源前先由负责人确认。不要把真实Key写入镜像、GitHub、源码ZIP或截图。
 
@@ -44,9 +44,10 @@
 - 现有预算相关环境变量
 - `PUBLIC_ACCESS_ENABLED=true`
 - `PUBLIC_SESSION_SECRET`（至少32位随机值，只在FC环境变量中保存）
-- `PUBLIC_PROJECTS_PER_DAY=12`
-- `PUBLIC_RUNS_PER_HOUR=6`
-- `PUBLIC_MEDIA_PER_HOUR=3`
+- `PUBLIC_USAGE_LIMITS_ENABLED=false`
+- `PUBLIC_PROJECTS_PER_DAY=0`
+- `PUBLIC_RUNS_PER_HOUR=0`
+- `PUBLIC_MEDIA_PER_HOUR=0`
 - `PUBLIC_MAX_ACTIVE_JOBS=1`
 - `PUBLIC_MAX_QUEUED_JOBS=4`
 

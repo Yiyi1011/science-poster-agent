@@ -197,13 +197,6 @@ export default function Studio() {
     try { await runProject(project, feedback); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  async function retryResearchAndVideo() {
-    if (!project) return;
-    setBusy(true); setError(""); setTab("scenes");
-    try { await runProject(project, "自动扩展检索词，分清歧义后重新组织科普内容。", true, true); }
-    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-
   async function generateMedia(proceed = false) {
     if (!project || !version) return;
     if (proceed && !window.confirm("这一稿未完全通过证据自动检查（部分内容可能超出已核实资料范围）。确认仍用它直接制作视频？")) return;
@@ -309,7 +302,7 @@ export default function Studio() {
                 {!selectedMedia?.video && !running && mediaEligible && <><button disabled={locked} onClick={() => void generateMedia()}>为这一版制作卡通视频（调用百炼）</button>
                 <small>通常需要数分钟。新建项目会自动制片；这个按钮仅用于旧版或中断任务的恢复。</small></>}
                 {!selectedMedia?.video && !running && !mediaEligible && <div className={primerBased ? "studio-research" : "studio-error"}><strong>{primerBased ? "本版基于AI初步解释，尚未经外部来源核实。" : "正在等待可靠资料。"}</strong><br/>
-                  {["blocked", "pending"].includes(version?.review_status ?? "") ? <><span>{primerBased ? "未找到可核对的公开网页，已用AI初步回答先行制作，人工核对后再发布。" : version?.draft?.scenes?.length ? "已有分镜，但还未通过证据自动检查。" : "当前检索到的内容还不足以支持完整解释。"}</span>{version?.review_status === "blocked" ? <button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void retryResearchAndVideo()}>继续扩大检索范围并生成视频</button> : null}{version?.draft?.scenes?.length ? <button type="button" disabled={locked || version?.version !== latest?.version} onClick={() => void generateMedia(true)}>已有分镜，直接用现有稿制作视频</button> : null}<small>直接制片不会跳过人工判断：确认后仍会记录这一决定。</small></> : "请先选择最新版本。"}</div>}
+                  {["blocked", "pending"].includes(version?.review_status ?? "") ? <><span>{primerBased ? "未找到可核对的公开网页，系统已使用AI初步解释继续制片；发布前请人工核对。" : version?.draft?.scenes?.length ? "已有分镜，系统会默认直接进入视频制作。" : "当前没有可制作的分镜。"}</span><small>不再要求选择继续检索或直接生成；未完全通过的证据检查仍会保留在版本记录中。</small></> : "请先选择最新版本。"}</div>}
                 {selectedMedia?.proceeded_from_blocked && <p className="studio-error">本片由你确认后直接使用未完全通过证据检查的稿子制作，发布前请再人工核对内容。</p>}
                 {selectedMedia?.video && <p><strong>已找到本版可播放成片（v{selectedMedia.version}）。</strong> 下方可直接播放或下载；刷新页面不会丢失。</p>}
                 {failedMediaCount > 0 && <details><summary>另保留{failedMediaCount}次未完成制片记录</summary>{versionMedia.filter(m=>m.state==="failed").map(m=><p key={m.id}>{m.stage}</p>)}</details>}

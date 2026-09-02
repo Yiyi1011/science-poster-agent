@@ -142,10 +142,12 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, plannin
         raise ValueError("Every scene requires an approved illustration and voice")
     font_path = find_font()
     title_font, subtitle_font, small_font = [ImageFont.truetype(font_path, n) for n in (36, 32, 20)]
-    images = [Image.open(p).convert("RGB") for p in image_paths]
+    # Cartoon frames are drawn from plans and never use the accepted preview
+    # PNGs.  Avoid decoding all of them in FC before starting FFmpeg.
+    images = [] if cartoon_plans else [Image.open(p).convert("RGB") for p in image_paths]
     voice_durations=[wav_pcm_duration(path) for path in audio_paths]
     durations = combine_audio(audio_paths, folder / "combined.wav", 68 if cartoon_plans else 0)
-    fps = 20 if cartoon_plans else FPS
+    fps = FPS
     end_times, cursor, captions, subtitles = [], 0.0, [], []
     for scene, duration, voice_duration in zip(draft.scenes, durations, voice_durations, strict=True):
         pieces = complete_sentence_captions(scene.narration)
@@ -168,11 +170,12 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, plannin
         illustrated_poster(draft, images[0], folder / "poster.png", font_path)
     command = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
         "-s", f"{W}x{H}", "-r", str(fps), "-i", "pipe:0", "-i", str(folder / "combined.wav"),
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac",
+        "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-threads", "1",
+        "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac",
         "-shortest", "-movflags", "+faststart", str(folder / "preview.mp4")]
     with (folder / "compose.log").open("wb") as log:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            bufsize=0, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         try:
             scene_index, caption_index = 0, 0
             for frame in range(math.ceil(cursor * fps)):
@@ -191,25 +194,28 @@ def compose(draft, image_paths, audio_paths, folder, cartoon_plans=None, plannin
                     art = ImageOps.contain(images[scene_index], (int(1140 * scale), int(490 * scale)))
                     canvas = Image.new("RGB", (W, H), "#08252f")
                     canvas.paste(art, ((W - art.width) // 2, 92 + (490 - art.height) // 2))
-                draw = ImageDraw.Draw(canvas)
-                if not cartoon_plans:
-                    draw.text((44, 18), f"{scene_index + 1:02}  {draft.scenes[scene_index].heading}", font=title_font, fill="#ffda83")
-                    draw.text((44, 64), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
-                cap_start, cap_end, cap_text = captions[caption_index]
-                caption = cap_text if cap_start <= seconds < cap_end else ""
-                caption_lines = wrap_pixels(caption, subtitle_font, W - 140)
-                line_height = subtitle_font.size + 9
-                box_height = max(87, len(caption_lines) * line_height + 28)
-                box_top, box_bottom = 685 - box_height, 685
-                draw.rounded_rectangle((42, box_top, W - 42, box_bottom), radius=16, fill="#174550")
-                text_y = box_top + (box_height - len(caption_lines) * line_height) / 2
-                for line in caption_lines:
-                    draw.text(((W - subtitle_font.getlength(line)) / 2, text_y), line, font=subtitle_font, fill="white")
-                    text_y += line_height
-                draw.rectangle((0, H - 6, W * seconds / cursor, H), fill="#ffda83")
-                if cartoon_plans:
-                    draw.text((44, 689), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
-                process.stdin.write(canvas.tobytes())
+                try:
+                    draw = ImageDraw.Draw(canvas)
+                    if not cartoon_plans:
+                        draw.text((44, 18), f"{scene_index + 1:02}  {draft.scenes[scene_index].heading}", font=title_font, fill="#ffda83")
+                        draw.text((44, 64), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
+                    cap_start, cap_end, cap_text = captions[caption_index]
+                    caption = cap_text if cap_start <= seconds < cap_end else ""
+                    caption_lines = wrap_pixels(caption, subtitle_font, W - 140)
+                    line_height = subtitle_font.size + 9
+                    box_height = max(87, len(caption_lines) * line_height + 28)
+                    box_top, box_bottom = 685 - box_height, 685
+                    draw.rounded_rectangle((42, box_top, W - 42, box_bottom), radius=16, fill="#174550")
+                    text_y = box_top + (box_height - len(caption_lines) * line_height) / 2
+                    for line in caption_lines:
+                        draw.text(((W - subtitle_font.getlength(line)) / 2, text_y), line, font=subtitle_font, fill="white")
+                        text_y += line_height
+                    draw.rectangle((0, H - 6, W * seconds / cursor, H), fill="#ffda83")
+                    if cartoon_plans:
+                        draw.text((44, 689), "SCIVIS · 科普视频", font=small_font, fill="#75d9c4")
+                    process.stdin.write(canvas.tobytes())
+                finally:
+                    canvas.close()
             process.stdin.close()
             if process.wait(timeout=60) != 0:
                 raise RuntimeError("Video encoding failed")

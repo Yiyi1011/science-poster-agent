@@ -21,7 +21,7 @@ _job_slots_size = 0
 
 
 def _quota(request: Request, action: str, limit: int, daily: bool = False) -> None:
-    if not settings.public_access_enabled:
+    if not settings.public_access_enabled or not settings.public_usage_limits_enabled or limit <= 0:
         return
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d" if daily else "%Y-%m-%dT%H")
     try:
@@ -31,7 +31,7 @@ def _quota(request: Request, action: str, limit: int, daily: bool = False) -> No
 
 
 def _quota_spec(request: Request, action: str, limit: int) -> tuple[str, str, str, int] | None:
-    if not settings.public_access_enabled:
+    if not settings.public_access_enabled or not settings.public_usage_limits_enabled or limit <= 0:
         return None
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
     return owner_from(request), action, stamp, limit
@@ -63,7 +63,7 @@ async def execute_with_video(project_id, request):
     await execute(project_id, request)
     project = store.get_project(project_id)
     run = next(r for r in project["runs"] if r["id"] == str(request.request_id))
-    if not request.make_video or settings.mock_ai or run["state"] != "succeeded":
+    if not request.make_video or settings.mock_ai or run["state"] not in {"succeeded", "blocked"}:
         return
     from app.services.studio_media import execute_media
     # A run may finish on the fallback path "最后一轮修订未通过，沿用本轮已审核
@@ -72,10 +72,18 @@ async def execute_with_video(project_id, request):
     # eligible version, otherwise the accepted draft never gets its video.
     target = next((v for v in reversed(project["versions"])
                    if v.get("review_status") in {"ai_checked_human_pending", "needs_human_review"}), None)
+    proceed_from_blocked = False
+    if target is None and project["versions"]:
+        candidate = project["versions"][-1]
+        if (candidate.get("mode") == "bailian" and candidate.get("draft")
+                and candidate.get("review_status") in {"blocked", "pending"}):
+            target = candidate
+            proceed_from_blocked = True
     if target is None:
         return
     media_request = MediaInput(request_id=uuid5(NAMESPACE_URL, str(request.request_id) + "/cartoon"),
-                               expected_version=target["version"], renderer="cartoon")
+                               expected_version=target["version"], renderer="cartoon",
+                               proceed_from_blocked=proceed_from_blocked)
     try:
         fresh = store.reserve_media(project_id, media_request)
     except ValueError:

@@ -94,9 +94,12 @@ class Settings:
     # automatically and never see an API key or setup screen.
     public_access_enabled: bool = _as_bool(os.getenv("PUBLIC_ACCESS_ENABLED"), False)
     public_session_secret: str = os.getenv("PUBLIC_SESSION_SECRET", "")
-    public_projects_per_day: int = int(os.getenv("PUBLIC_PROJECTS_PER_DAY", "12"))
-    public_runs_per_hour: int = int(os.getenv("PUBLIC_RUNS_PER_HOUR", "6"))
-    public_media_per_hour: int = int(os.getenv("PUBLIC_MEDIA_PER_HOUR", "3"))
+    public_usage_limits_enabled: bool = _as_bool(os.getenv("PUBLIC_USAGE_LIMITS_ENABLED"), False)
+    # Zero disables the corresponding per-session usage counter.  Concurrency
+    # and queue limits remain independent safeguards for the small FC instance.
+    public_projects_per_day: int = int(os.getenv("PUBLIC_PROJECTS_PER_DAY", "0"))
+    public_runs_per_hour: int = int(os.getenv("PUBLIC_RUNS_PER_HOUR", "0"))
+    public_media_per_hour: int = int(os.getenv("PUBLIC_MEDIA_PER_HOUR", "0"))
     public_max_active_jobs: int = int(os.getenv("PUBLIC_MAX_ACTIVE_JOBS", "1"))
     public_max_queued_jobs: int = int(os.getenv("PUBLIC_MAX_QUEUED_JOBS", "4"))
 
@@ -146,8 +149,8 @@ class Settings:
         if self.public_max_queued_jobs < self.public_max_active_jobs:
             raise RuntimeError("PUBLIC_MAX_QUEUED_JOBS cannot be smaller than active jobs.")
         for value in (self.public_projects_per_day, self.public_runs_per_hour, self.public_media_per_hour):
-            if value < 1:
-                raise RuntimeError("Public usage limits must be positive integers.")
+            if value < 0:
+                raise RuntimeError("Public usage limits must be non-negative integers; zero disables a counter.")
 
 
 settings = Settings()

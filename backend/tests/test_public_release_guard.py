@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
-from app.services.public_access import decode_session, encode_session
+from app.services.public_access import SESSION_HEADER, decode_session, encode_session
 from app.services import studio_store as store
 from app.studio_models import ProjectInput, RunInput
 from uuid import uuid4
@@ -44,6 +44,36 @@ def test_public_clients_automatically_receive_isolated_project_lists(monkeypatch
         assert second.get(f"/api/studio/projects/{first_id}").status_code == 404
         cookie = created_first.headers["set-cookie"].lower()
         assert "httponly" in cookie and "samesite=lax" in cookie
+
+
+def test_signed_header_preserves_cross_origin_session(monkeypatch):
+    from app import main, studio_routes
+    configured = replace(settings, public_access_enabled=True, public_session_secret="h" * 32)
+    monkeypatch.setattr(main, "settings", configured)
+    monkeypatch.setattr(studio_routes, "settings", configured)
+    with TestClient(app) as first:
+        created = first.post("/api/studio/projects", json=payload("跨域页面的问题"))
+        token = created.headers[SESSION_HEADER]
+    with TestClient(app) as separate_browser_request:
+        listed = separate_browser_request.get("/api/studio/projects", headers={SESSION_HEADER: token})
+        assert [project["topic"] for project in listed.json()] == ["跨域页面的问题"]
+        assert listed.headers[SESSION_HEADER] == token
+
+
+def test_signed_query_preserves_session_for_media_links(monkeypatch):
+    from app import main, studio_routes
+    configured = replace(settings, public_access_enabled=True, public_session_secret="m" * 32)
+    monkeypatch.setattr(main, "settings", configured)
+    monkeypatch.setattr(studio_routes, "settings", configured)
+    with TestClient(app) as first:
+        created = first.post("/api/studio/projects", json=payload("媒体链接的问题"))
+        token = created.headers[SESSION_HEADER]
+        project_id = created.json()["id"]
+    with TestClient(app) as separate_browser_request:
+        response = separate_browser_request.get(
+            f"/api/studio/projects/{project_id}?_scivis_session={token}"
+        )
+        assert response.status_code == 200
 
 
 def test_public_project_quota_is_transparent_and_atomic(monkeypatch):

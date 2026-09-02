@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import "./studio.css";
 import "./studio-updates.css";
+import { apiFetch, apiResourceUrl } from "./runtime";
 
 type Source = { source_id: string; title: string; url: string; text: string };
 type Input = { topic: string; audience: string; sources: Source[]; auto_sources?: boolean };
@@ -40,7 +41,7 @@ const api = "/api/studio";
 
 async function request<T>(url: string, data?: unknown, method = "POST"): Promise<T> {
   const hasBody = data !== undefined;
-  const response = await fetch(url, hasBody || method !== "POST"
+  const response = await apiFetch(url, hasBody || method !== "POST"
     ? { method, headers: hasBody ? { "Content-Type": "application/json" } : undefined, body: hasBody ? JSON.stringify(data) : undefined }
     : undefined);
   const result = await response.json();
@@ -107,7 +108,7 @@ export default function Studio() {
   const draft = version?.draft;
   const run = project?.runs.at(-1);
   const locked = busy || running;
-  const posterUrl = project && version ? `${api}/projects/${project.id}/poster.svg?revision=${version.version}` : "";
+  const posterUrl = project && version ? apiResourceUrl(`${api}/projects/${project.id}/poster.svg?revision=${version.version}`) : "";
   const versionMedia = project?.media?.filter(m => m.version === version?.version) ?? [];
   const selectedMedia = [...versionMedia].reverse().find(m => m.state === "succeeded" && Boolean(m.video)) ?? versionMedia.at(-1);
   const activeMedia = [...versionMedia].reverse().find(m => m.state === "running");
@@ -116,7 +117,7 @@ export default function Studio() {
   const mediaEligible = Boolean(version && version.version === latest?.version &&
     ["ai_checked_human_pending", "needs_human_review"].includes(version.review_status));
   const primerBased = Boolean(project?.versions.some(v => (v.fallback_reason ?? "").includes("AI初步解释")));
-  const mediaUrl = (name: string) => `${api}/projects/${project!.id}/media/${selectedMedia!.id}/${encodeURIComponent(name)}`;
+  const mediaUrl = (name: string) => apiResourceUrl(`${api}/projects/${project!.id}/media/${selectedMedia!.id}/${encodeURIComponent(name)}`);
 
   useEffect(() => { Promise.all([request<Summary[]>(`${api}/projects`), request<{ mock_ai: boolean; text_model: string }>("/api/config/public")])
     .then(([list, c]) => { setProjects(list); setConfig(c); }).catch(e => setError(e.message)); }, []);
@@ -296,7 +297,7 @@ export default function Studio() {
         </details>}
         {!draft ? running ? <div className="studio-progress-wrap"><ProductionProgress stage={activeStage || run?.stage || "正在查找并核对资料"} events={activeMedia?.events} /></div> : <div className="studio-empty"><div className="studio-orbit">✦</div><h3>一个问题，一段科普</h3><p>卡通视频会在这里呈现。讲解、证据与修改记录一并保留，海报按需查看。</p><small>生成过程会在这里持续更新。</small></div> : <>
           <div className="studio-toolbar"><div role="tablist" aria-label="作品视图">{[["scenes", "科普视频"], ["explain", "一步步讲清楚"], ["poster", "配套海报（选做）"], ["evidence", "证据与版本"]].map(([key, label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setPlaying(false); }}>{label}</button>)}</div>
-            {!running && <a href={`${api}/projects/${project!.id}/export`}>导出草稿包 ↓</a>}</div>
+            {!running && <a href={apiResourceUrl(`${api}/projects/${project!.id}/export`)}>导出草稿包 ↓</a>}</div>
           <div className="studio-scroll">
             <p className="studio-hint">{version?.mode === "mock" ? "当前为功能演示数据。" : version?.review_status === "blocked" ? "系统正在补充可靠资料，已保留当前版本。" : "作品、来源与修改记录已分层保存。"}</p>
             {tab === "poster" && <><button className="studio-poster" aria-label="放大海报" onClick={() => setPreview(true)}><img src={posterUrl} alt={draft.title} /><span>点击查看大图 ↗</span></button><p className="studio-hint">当前显示 v{version?.version}；可下载可编辑海报，导出包同时保存来源与完整版本记录。</p></>}

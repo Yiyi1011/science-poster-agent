@@ -6,6 +6,7 @@ import type {
   VideoStoryboard,
   VisualAssetBundle,
 } from "./types";
+import { apiFetch } from "./runtime";
 
 async function readError(response: Response, fallback: string): Promise<Error> {
   const payload = await response.json().catch(() => null) as { detail?: string } | null;
@@ -13,7 +14,7 @@ async function readError(response: Response, fallback: string): Promise<Error> {
 }
 
 export async function createPosterPlan(input: PosterRequest): Promise<PosterPlan> {
-  const response = await fetch("/api/posters/plan", {
+  const response = await apiFetch("/api/posters/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -25,7 +26,7 @@ export async function createPosterPlan(input: PosterRequest): Promise<PosterPlan
 }
 
 export async function renderPoster(plan: PosterPlan): Promise<Blob> {
-  const response = await fetch("/api/posters/render-svg", {
+  const response = await apiFetch("/api/posters/render-svg", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(plan),
@@ -37,7 +38,7 @@ export async function renderPoster(plan: PosterPlan): Promise<Blob> {
 }
 
 export async function createVisualAssetSpecs(plan: PosterPlan): Promise<VisualAssetBundle> {
-  const response = await fetch("/api/visual-assets/specs", {
+  const response = await apiFetch("/api/visual-assets/specs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(plan),
@@ -47,7 +48,7 @@ export async function createVisualAssetSpecs(plan: PosterPlan): Promise<VisualAs
 }
 
 export async function createVideoStoryboard(plan: PosterPlan): Promise<VideoStoryboard> {
-  const response = await fetch("/api/videos/storyboard", {
+  const response = await apiFetch("/api/videos/storyboard", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(plan),
@@ -62,7 +63,7 @@ export async function createRevisionPlan(input: {
   category: ReviewCategory;
   feedback: string;
 }): Promise<RevisionPlan> {
-  const response = await fetch("/api/revisions/plan", {
+  const response = await apiFetch("/api/revisions/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./storyboard-editor.css";
+import { apiFetch, apiResourceUrl, siteUrl } from "./runtime";
 
 type Scene = {
   scene_id: string; title: string; duration_seconds: number; narration: string;
@@ -39,7 +40,7 @@ const endpoint = "/api/videos/editor/solar";
 const fieldNames: Record<string, string> = {title:"镜头标题", duration_seconds:"时长", narration:"旁白", subtitle_cards:"字幕", visual_direction:"画面说明"};
 
 async function jsonRequest<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
+  const response = await apiFetch(url, options);
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = typeof data?.detail === "string" ? data.detail :
@@ -188,7 +189,7 @@ export default function StoryboardEditor() {
   return <main className="storyboard-editor">
     <header className="editor-header">
       <div><div className="eyebrow">SCIVIS / VIDEO WORKSHOP</div><h1>系统来修正，你来把关</h1><p>太阳的三位信使 · 自动检查、修正与留痕</p></div>
-      <div className="editor-header-actions"><span className="editor-zero">本轮操作不调用模型</span><a href="/">返回海报创作</a></div>
+      <div className="editor-header-actions"><span className="editor-zero">本轮操作不调用模型</span><a href={siteUrl()}>返回海报创作</a></div>
     </header>
     <div className="editor-notice">点击一次，系统自动检查7个镜头、修正可处理的问题并保存记录。当前自动处理字幕与时长；旁白和科学含义改写、重新配音与视频重生成尚未接入，不会覆盖原成片。</div>
     {error && <p className="editor-error" role="alert">{error}</p>}
@@ -244,7 +245,7 @@ export default function StoryboardEditor() {
           </details>
         </section>
         <aside className="editor-inspector">
-          <section className="editor-media"><div className="editor-small-heading">对照：已认可的67秒成片 / 不随草稿改变</div><video ref={video} controls playsInline preload="metadata" src={snapshot.media_url} aria-label="已认可的成片对照" onLoadedMetadata={()=>{if(video.current)video.current.currentTime=snapshot.baseline_scenes[selected].media_start_seconds+0.125;}}/><a href="/solar-animation/voiced.html" target="_blank" rel="noopener noreferrer">打开大图播放与完整旁白 →</a><small>点击左侧镜头，可定位原片对应位置。</small></section>
+          <section className="editor-media"><div className="editor-small-heading">对照：已认可的67秒成片 / 不随草稿改变</div><video ref={video} controls playsInline preload="metadata" src={apiResourceUrl(snapshot.media_url)} aria-label="已认可的成片对照" onLoadedMetadata={()=>{if(video.current)video.current.currentTime=snapshot.baseline_scenes[selected].media_start_seconds+0.125;}}/><a href={siteUrl("solar-animation/voiced.html")} target="_blank" rel="noopener noreferrer">打开大图播放与完整旁白 →</a><small>点击左侧镜头，可定位原片对应位置。</small></section>
           <section className="editor-analysis" aria-live="polite"><div className="editor-small-heading">本地检查 / 当前镜头</div>
             {checking?<p>正在检查修改影响…</p>:review?<>
               <div className="editor-impact"><span>配音</span><b>{review.requires_tts?"本镜头待重配":"复用原配音"}</b><span>画面</span><b>{review.requires_render?"待重新渲染":"保留原镜头"}</b></div>

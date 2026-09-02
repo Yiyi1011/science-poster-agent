@@ -18,6 +18,8 @@ from app.config import Settings
 
 
 COOKIE_NAME = "scivis_session"
+SESSION_HEADER = "X-Scivis-Session"
+SESSION_QUERY = "_scivis_session"
 
 
 @dataclass(frozen=True)
@@ -47,22 +49,31 @@ def decode_session(value: str, secret: str) -> str | None:
 def session_for(request: Request, settings: Settings) -> AnonymousSession:
     if not settings.public_access_enabled:
         return AnonymousSession("local", False)
-    existing = decode_session(request.cookies.get(COOKIE_NAME, ""), settings.public_session_secret)
+    supplied = (
+        request.headers.get(SESSION_HEADER, "")
+        or request.query_params.get(SESSION_QUERY, "")
+        or request.cookies.get(COOKIE_NAME, "")
+    )
+    existing = decode_session(supplied, settings.public_session_secret)
     if existing:
         return AnonymousSession(existing, False)
     return AnonymousSession(secrets.token_hex(16), True)
 
 
 def attach_cookie(response: Response, session: AnonymousSession, settings: Settings) -> None:
-    if not settings.public_access_enabled or not session.is_new:
+    if not settings.public_access_enabled:
+        return
+    encoded = encode_session(session.session_id, settings.public_session_secret)
+    response.headers[SESSION_HEADER] = encoded
+    if not session.is_new:
         return
     response.set_cookie(
         COOKIE_NAME,
-        encode_session(session.session_id, settings.public_session_secret),
+        encoded,
         max_age=60 * 60 * 24 * 30,
         httponly=True,
         secure=settings.app_env == "production",
-        samesite="lax",
+        samesite="none" if settings.app_env == "production" else "lax",
         path="/",
     )
 

@@ -14,6 +14,7 @@ import type {
   VideoStoryboard,
   VisualAssetBundle,
 } from "./types";
+import { siteUrl } from "./runtime";
 
 const initialRequest: PosterRequest = {
   topic: "",
@@ -170,8 +171,8 @@ export default function App() {
         <div className="eyebrow">EVIDENCE → STORY → VISUAL</div>
         <h1>把专业科学知识<br />变成公众看得懂的海报</h1>
         <p>跨主题输入、证据追溯、视觉规划与迭代修订。</p>
-        <a className="animation-entry" href="/solar-animation/voiced.html" target="_blank" rel="noopener noreferrer">观看卡通科普视频 → <small>约67秒 · 千问AI旁白 + 要点字幕 · 试听版</small></a>
-        <a className="animation-entry" href="/?view=storyboard">自动修正太阳案例分镜 → <small>自动检查与留档 · 手动微调可选</small></a>
+        <a className="animation-entry" href={siteUrl("solar-animation/voiced.html")} target="_blank" rel="noopener noreferrer">观看卡通科普视频 → <small>约67秒 · 千问AI旁白 + 要点字幕 · 试听版</small></a>
+        <a className="animation-entry" href={`${siteUrl()}?view=storyboard`}>自动修正太阳案例分镜 → <small>自动检查与留档 · 手动微调可选</small></a>
       </header>
 
       <section className="workspace">

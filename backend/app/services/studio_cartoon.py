@@ -143,14 +143,16 @@ def frame(plan, phase, heading=""):
         for left,right in zip(positions,positions[1:]):
             y=312; start=left+95;end=right-95
             if plan.relationship == "exchange":
-                # 双向交换：同一水平线两端各画一个箭头，视觉上明确是互发信息而非单向流程。
+                # 双向交换：两端各画一个同色大箭头（两端同色是双向的标准画法，
+                # 一端异色小三角曾被视觉质检误读为单向）。流动圆点贴线往返移动，
+                # 避免被读成线上未解释的节点。
                 draw.line((start,y,end,y),fill="#61d7d0",width=5)
-                draw.polygon([(end,y),(end-14,y-9),(end-14,y+9)],fill="#61d7d0")
-                draw.polygon([(start,y),(start+14,y-9),(start+14,y+9)],fill="#ffdc78")
+                draw.polygon([(end,y),(end-20,y-12),(end-20,y+12)],fill="#61d7d0")
+                draw.polygon([(start,y),(start+20,y-12),(start+20,y+12)],fill="#61d7d0")
                 for direction in (1,-1):
                     t=(phase*1.7+(0 if direction==1 else .5))%1
                     x=start+(end-start)*t if direction==1 else end-(end-start)*t
-                    draw.ellipse((x-5,y+direction*18-5,x+5,y+direction*18+5),
+                    draw.ellipse((x-4,y-4,x+4,y+4),
                                  fill="#ffdc78" if direction==1 else "#61d7d0")
             else:
                 draw.line((start,y,end,y),fill="#386074",width=4)
@@ -232,6 +234,12 @@ async def execute_cartoon(project_id, request):
                         guard_text_budget(settings)
                         raw,call=await client.studio_json(PLAN_PROMPT,{"script":scene.model_dump(),"claims":[c.model_dump() for c in draft.claims],
                             "previous":art.model_dump(),"issues":correction,"schema":CartoonScene.model_json_schema()},"studio_cartoon_repair")
+                        # Vision-feedback replans may add actors with icons outside
+                        # the library; normalize like the plan path, or the scene
+                        # would crash validation and abort the whole media job.
+                        wrapped={"scenes":[raw]}
+                        job["mechanical_repairs"].extend(normalize_actor_icons(wrapped))
+                        raw=wrapped["scenes"][0]
                         art=CartoonScene.model_validate(raw)
                         if art.scene_id!=scene.scene_id:raise ValueError("Revised cartoon scene mismatch")
                     else:call=receipt

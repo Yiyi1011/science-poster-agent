@@ -32,3 +32,7 @@ artifacts/storyboard-editor/
 /frontend/vite.config.d.ts
 .DS_Store
 Thumbs.db
+
+# Desktop packaging build outputs (contain runtime data and never enter git)
+build/
+dist-desktop/

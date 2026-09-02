@@ -6,8 +6,14 @@ from pathlib import Path
 
 
 def _load_dotenv() -> None:
-    """Load a small .env file without adding a runtime dependency."""
-    env_path = Path(__file__).resolve().parents[2] / ".env"
+    """Load a small .env file without adding a runtime dependency.
+
+    SCIVIS_ENV_FILE points to the file in packaged desktop/docker layouts;
+    otherwise the repository root .env is used. Values already present in the
+    environment (e.g. set by the desktop launcher) are never overridden.
+    """
+    configured = os.getenv("SCIVIS_ENV_FILE", "").strip()
+    env_path = Path(configured).expanduser() if configured else Path(__file__).resolve().parents[2] / ".env"
     if not env_path.exists():
         return
     for raw_line in env_path.read_text(encoding="utf-8").splitlines():

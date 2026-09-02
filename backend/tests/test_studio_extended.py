@@ -299,6 +299,48 @@ def test_cartoon_objects_really_move_and_reject_unsupported_icons():
     with pytest.raises(ValueError): CartoonScene.model_validate(plan)
 
 
+def test_exchange_arrowheads_are_both_teal_and_dots_stay_on_the_line():
+    """Vision QA once misread a one-sided gold arrowhead as a unidirectional
+    arrow. Both ends must now be the same high-contrast teal, and the flow dots
+    must sit ON the arrow line instead of floating above/below it as
+    unexplained nodes."""
+    from app.services.studio_cartoon import frame
+    plan = {"scene_id": "S1", "relationship": "exchange", "caption": "两端同色大箭头表示双向交换。", "actors": [
+        {"icon": "phone", "label": "手机应用", "explanation": "发出请求"},
+        {"icon": "server", "label": "天气服务", "explanation": "返回资料"}]}
+    image = frame(plan, 0.4, "测试")
+    px = image.load()
+    TEAL = (97, 215, 208)
+    def near(c, t, tol=28):
+        return all(abs(a - b) <= tol for a, b in zip(c, t))
+    y = 312
+    left = sum(1 for x in range(225, 270) for yy in range(y - 14, y + 15) if near(px[x, yy], TEAL))
+    right = sum(1 for x in range(1010, 1060) for yy in range(y - 14, y + 15) if near(px[x, yy], TEAL))
+    assert left > 50 and right > 50  # two solid arrowheads, both teal
+    # No gold pixels above or below the line in the arrow band (dots moved on-line).
+    gold = sum(1 for x in range(270, 1000) for yy in (y - 22, y + 22) if near(px[x, yy], (255, 220, 120)))
+    assert gold == 0
+
+
+def test_cartoon_vision_repair_normalizes_unknown_icons_before_validation():
+    """A vision-feedback replan can add actors with icons outside the library.
+    The scene repair path must normalize them (like the plan path) before
+    CartoonScene validation, instead of crashing the whole media job with a
+    literal_error."""
+    from app.services.studio_cartoon import CartoonScene, normalize_actor_icons
+    raw = {"scene_id": "V2", "relationship": "reveal",
+           "caption": "铁锈是铁与氧气和水长期反应的结果。",
+           "actors": [{"icon": "ironbar", "label": "铁钉", "explanation": "表面慢慢生锈"},
+                      {"icon": "droplet", "label": "水滴", "explanation": "参与反应"},
+                      {"icon": "aibox", "label": "AI模型", "explanation": "参与反应"}]}
+    wrapped = {"scenes": [raw]}
+    changes = normalize_actor_icons(wrapped)
+    assert any(c["field"] == "scenes.0.actors.0.icon" for c in changes)
+    scene = CartoonScene.model_validate(wrapped["scenes"][0])  # previously raised
+    icons = [a.icon for a in scene.actors]
+    assert icons[2] == "robot" and icons[0] != "ironbar"
+
+
 def test_cartoon_entrance_never_collides_with_labels(monkeypatch):
     from app.services import studio_cartoon as cartoon
     bottoms = []
@@ -498,3 +540,31 @@ def test_general_water_question_has_verified_readable_entry_points_when_search_i
     assert "https://oceanservice.noaa.gov/facts/oceanblue.html" in visited
     assert "https://www.sciencelearn.org.nz/resources/3134-remote-sensing-and-water-quality" in visited
     assert result["sources"] and result["sources"][0]["url"].startswith("https://oceanservice.noaa.gov/")
+
+
+def test_fallback_run_media_targets_last_eligible_version_not_blocked_latest(monkeypatch):
+    """When the last review round is rejected and the run falls back to the
+    previously accepted draft (its newest version is marked blocked), the
+    automatic media handoff must target the newest *eligible* version instead
+    of silently skipping the video."""
+    from app import studio_routes as routes
+    from app.services import studio_media as media
+    from dataclasses import replace
+    p = project()  # v1 = ai_checked_human_pending
+    request = RunInput(request_id=uuid4(), expected_version=1, make_video=True)
+    store.reserve(p["id"], request)  # reservation happens before the run appends versions
+    # The run's last review round is rejected: the accepted draft stays as v1
+    # and the rejected revision is recorded as a blocked v2 (pipeline fallback).
+    store.append_version(p["id"], dict(p["versions"][0], review_status="blocked"))
+    p = store.get_project(p["id"])
+    assert [v["review_status"] for v in p["versions"]] == ["ai_checked_human_pending", "blocked"]
+    async def reviewed(pid, r): store.stage(r.request_id, "沿用已审核版本", "succeeded")
+    calls = []
+    async def rendered(pid, r): calls.append(r)
+    monkeypatch.setattr(routes, "execute", reviewed)
+    monkeypatch.setattr(routes, "settings", replace(routes.settings, mock_ai=False))
+    monkeypatch.setattr(media, "execute_media", rendered)
+    asyncio.run(routes.execute_with_video(p["id"], request))
+    assert len(calls) == 1
+    assert calls[0].expected_version == 1, "media must target the accepted version, not the blocked latest"
+    assert calls[0].renderer == "cartoon"

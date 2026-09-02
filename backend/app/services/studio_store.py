@@ -189,14 +189,29 @@ def reserve_media(project_id, request):
             if existing["project"] != project_id or existing["version"] != request.expected_version or json.loads(existing["payload"]).get("renderer", "illustrated") != request.renderer:
                 raise ValueError("媒体请求编号已用于其他版本")
             return False
-        row = db.execute("SELECT payload FROM versions WHERE project=? ORDER BY number DESC LIMIT 1", (project_id,)).fetchone()
-        if not row:
+        rows = db.execute("SELECT number,payload FROM versions WHERE project=? ORDER BY number DESC", (project_id,)).fetchall()
+        if not rows:
             raise ValueError("请先生成有依据的脚本")
-        version = json.loads(row[0])
-        if version["version"] != request.expected_version:
+        # The media target is the newest *accepted* version. A rejected final
+        # revision (blocked) does not invalidate the accepted draft it was
+        # derived from, so it must not block that draft's video.
+        accepted = next((json.loads(r["payload"]) for r in rows
+                         if json.loads(r["payload"]).get("review_status") in {"ai_checked_human_pending", "needs_human_review"}), None)
+        if request.proceed_from_blocked:
+            # Manual "确认后直接制片" is only allowed on the newest blocked/pending
+            # script; an already-accepted script still takes the normal path.
+            latest = json.loads(rows[0]["payload"])
+            if latest["version"] == request.expected_version and latest.get("review_status") in {"blocked", "pending"}:
+                version, eligible = latest, False
+            elif accepted and accepted["version"] == request.expected_version:
+                version, eligible = accepted, True
+            else:
+                raise ValueError("只有最新一版未通过或待确认的脚本可以确认后直接制片")
+        elif accepted and accepted["version"] == request.expected_version:
+            version, eligible = accepted, True
+        else:
             raise ValueError("脚本已有新版本，请刷新")
-        eligible = version.get("review_status") in {"ai_checked_human_pending", "needs_human_review"}
-        if version.get("mode") != "bailian" or not (eligible or (request.proceed_from_blocked and version.get("review_status") in {"blocked", "pending"})):
+        if version.get("mode") != "bailian" or not (eligible or request.proceed_from_blocked):
             raise ValueError("脚本还未通过基础检查，不能生成收费媒体")
         if db.execute("SELECT 1 FROM runs WHERE project=? AND state='running'", (project_id,)).fetchone():
             raise ValueError("请等待脚本审核完成")

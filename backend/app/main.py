@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 import asyncio
 from hashlib import sha256
@@ -135,7 +136,8 @@ app.include_router(storyboard_editor_router)
 from app.studio_routes import router as studio_router
 app.include_router(studio_router)
 
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+_frontend_env = os.getenv("SCIVIS_FRONTEND_DIST", "").strip()
+FRONTEND_DIST = Path(_frontend_env).expanduser() if _frontend_env else Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     assets_dir = FRONTEND_DIST / "assets"
     if assets_dir.exists():

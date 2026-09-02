@@ -23,8 +23,16 @@ async def execute_with_video(project_id, request):
     if not request.make_video or settings.mock_ai or run["state"] != "succeeded":
         return
     from app.services.studio_media import execute_media
+    # A run may finish on the fallback path "最后一轮修订未通过，沿用本轮已审核
+    # 通过的版本继续制作": the newest version is then marked blocked, while an
+    # earlier version already passed review. Media must target the newest
+    # eligible version, otherwise the accepted draft never gets its video.
+    target = next((v for v in reversed(project["versions"])
+                   if v.get("review_status") in {"ai_checked_human_pending", "needs_human_review"}), None)
+    if target is None:
+        return
     media_request = MediaInput(request_id=uuid5(NAMESPACE_URL, str(request.request_id) + "/cartoon"),
-                               expected_version=project["versions"][-1]["version"], renderer="cartoon")
+                               expected_version=target["version"], renderer="cartoon")
     try:
         fresh = store.reserve_media(project_id, media_request)
     except ValueError:

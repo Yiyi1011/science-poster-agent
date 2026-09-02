@@ -4,6 +4,7 @@
 
 | 模板/评审关注点 | 可提交证据 | 当前状态 |
 |---|---|---|
+| v0.5.8公网零配置候选 | `docs/versions/process/v0.5.8-preview.md`、`backend/app/services/public_access.py`、`backend/tests/test_public_release_guard.py`、`docs/deployment-fc.md` | 用户打开网址即可获得匿名签名会话，无需Key或本地安装；项目隔离、额度、队列、旧接口关闭和生产启动校验已通过203项测试及本机生产预检。Linux容器与真实公网视频待阿里云构建验收 |
 | v0.5.1只提问题→自动补证据→直接视频 | `docs/versions/process/v0.5.1-preview.md`、`制作日志.md`、Token项目私有manifest与`evidence/studio-v050/browser-media/3a6ee81f-*/report.json` | 用户未提供论文；千问自动读取IBM/RFC并逐字定位，v13自动进入6镜68秒制片；音轨、12个完整句字幕、三帧、浏览器播放/下载通过。仍须人工科学终审 |
 | 可恢复清理与Windows封装候选 | `scripts/manage_project_archive.py`、`scripts/backup_private_runtime.py`、`scripts/launch-packaged.ps1`、`scripts/run_packaged.py`、私有备份manifest | 先备份后归档20个重复/失败项目，选择器保留6个代表项目；不物理删除。启动器识别backend venv并预检依赖、FFmpeg、字体和百炼配置；不是免安装EXE |
 | v0.5.6权威资料恢复、水色成片与跨设备候选 | `docs/versions/process/v0.5.6-preview.md`、`evidence/studio-v056/browser-final-acceptance/report.json`、水色项目私有manifest、`Dockerfile` | 从0来源恢复到NOAA+大学科普2份原文；7镜68秒、音轨、15个完整句字幕、3帧抽样、浏览器播放/下载、390px布局通过。容器尚待有Docker的目标环境实际构建 |
@@ -32,8 +33,9 @@
 | 自动优先修正与可选手动微调 | `evidence/storyboard-editor-qa/automatic-first/report.json`、前后对照截图、`docs/storyboard-editor-guide.md` | 一次点击完成本地检查、无损字幕拆分、时长延长、复检和自动保存；记录输入/系统改动区别、原值/新值/原因。无修改也留档，网络重试不重复保存；手动微调折叠。截图来自明确练习输入，不冒充模型错误或视频重生成 |
 | 调用与费用 | `evidence/model-usage.jsonl`、`evidence/budget-authorization.md`、`evidence/billing-snapshot-2026-08-31.json` | v0.3结束时原价估算累计3.235630元；后续新增费用看最新台账/制作日志，不是实付。用户此前截图优惠后0.2799122559元无账期/付款状态，不等同历史实付；两项不能相加。搜索插件等费用须核对账单 |
 | 百炼应用调用证明 | `evidence/console/`与`evidence/knowledge-*.json` | 已有脱敏证据；正式提交截图待挑选 |
-| 应用可复现 | `README.md`、`backend/pyproject.toml`、`frontend/package.json`、`Dockerfile` | 本地可复现，当前147项后端测试和前端构建通过；云端持久化与访问控制仍需部署前确认 |
-| 公网部署 | `docs/deployment-fc.md`、`evidence/production-unified-server-check-2026-08-29.json` | 生产形态已验证；公网资源尚未创建 |
+| 应用可复现 | `README.md`、`backend/pyproject.toml`、`frontend/package.json`、`Dockerfile` | 本地可复现，当前203项后端测试和前端生产构建通过；本机生产环境变量预检通过，Linux镜像待云端实构建 |
+| 公网部署 | `docs/deployment-fc.md`、`backend/app/services/public_access.py`、`evidence/production-unified-server-check-2026-08-29.json` | 匿名会话、项目隔离、额度、队列、生产校验与NAS方案已准备；公网资源尚未创建，不写成已上线 |
+| 核心代码附件 | `docs/submission-source-package.md`、`docs/CODE_MAP.md`、`VERSION_NOTES.md` | 最终将从final标签生成脱敏ZIP上传夸克，并在材料中附GitHub标签链接；当前仍是过程版，不提前打最终包 |
 | 完整过程与报错 | 工作区根目录`制作日志.md` | 已记录LOG-001起的操作、错误与解决办法 |
 | 提交模板草稿 | 工作区`提交材料/赛道三方向2-提交材料草稿-v001.docx`与`work/submission-draft/structural-qa-v001.md` | 结构审计通过；待WPS逐页视觉检查和团队资料 |
 

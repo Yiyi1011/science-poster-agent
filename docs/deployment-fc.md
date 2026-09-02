@@ -1,8 +1,10 @@
 # 阿里云函数计算低成本部署方案
 
-状态：代码已准备，尚未创建任何计费云资源。
+状态：公网零配置发布候选已准备，尚未创建任何计费云资源。
 
-2026-08-31交接补充：本文件为历史部署草案，不是可直接开放真实模型的上线清单。当前尚缺公网鉴权、调用限制与持久存储；价格、试用资格和配置需在实际部署时重新核对。请先阅读`docs/github-and-handoff.md`的部署门槛。不要将携带真实Key的接口匿名公开。
+2026-09-02更新：最终用户入口改为同源公网Web应用。匿名浏览器会自动获得签名会话，项目彼此隔离；创建、审核和制片有透明额度，全局生成队列受控；旧版付费接口在公网模式关闭。最终用户无需账号、API Key、`.env`或本地安装。百炼Key和会话签名密钥只配置在FC环境变量中。
+
+这仍是发布候选清单：价格和试用资格须以部署当天控制台为准。创建云资源前先由负责人确认。不要把真实Key写入镜像、GitHub、源码ZIP或截图。
 
 ## 推荐架构
 
@@ -16,12 +18,14 @@
 |---|---:|---|
 | 类型 | Web函数，自定义容器或Funciton AI Web项目 | 适合FastAPI常驻HTTP服务 |
 | 监听 | `0.0.0.0:9000` | FC自定义容器默认CAPort为9000 |
-| vCPU / 内存 | 0.35 vCPU / 512 MB起步 | 当前应用不在函数内运行大模型 |
-| 最小实例数 | 0 | 无请求时释放资源，避免持续费用 |
-| 单实例并发 | 5起步 | 模型请求以等待外部API为主 |
-| 执行超时 | 180秒 | 覆盖知识检索与文本生成等待时间 |
-| 临时数据目录 | `/tmp/science-poster-agent` | FC实例文件系统不应承担当作持久数据库 |
-| HTTP触发器 | 接入真实模型前必须有访问保护 | 匿名测试仅限不含私有数据且不调用付费模型的Mock环境 |
+| vCPU / 内存 | 1 vCPU / 2 GB起步 | 本服务本地绘制1280×720帧并用FFmpeg合成视频，512 MB不是本版验收配置 |
+| 最小实例数 | 验收/答辩期间1，结束后0 | 当前任务在单进程后台持续执行；答辩期保活，非展示期降为0节省费用 |
+| 最大实例数 | 1 | SQLite、任务集合与生成队列按单实例设计，禁止横向扩容 |
+| 单实例并发 | 至少5 | 一个生成任务运行时仍需接受前端进度轮询和媒体读取 |
+| 执行超时 | 900秒或更长 | 官方允许更长超时；需覆盖检索、两轮审核、逐镜检查、TTS与合成 |
+| 临时磁盘 | 10 GB | FFmpeg中间帧和音频需要空间；仅作为工作空间，不作为唯一成品存储 |
+| 持久目录 | NAS挂载到`/data` | SQLite、项目、音频、字幕和MP4必须跨实例回收保存 |
+| HTTP触发器 | HTTPS公网地址 | 代码内匿名会话、额度和队列已启用；Key不下发浏览器 |
 
 ## 必须配置的环境变量
 
@@ -36,14 +40,21 @@
 - `BAILIAN_APP_ID`
 - `RETRIEVAL_MIN_SCORE=0.50`
 - `QWEN_TEXT_MODEL=qwen-plus`
-- `SCIENCE_POSTER_DATA_DIR=/tmp/science-poster-agent`
+- `SCIENCE_POSTER_DATA_DIR=/data`
 - 现有预算相关环境变量
+- `PUBLIC_ACCESS_ENABLED=true`
+- `PUBLIC_SESSION_SECRET`（至少32位随机值，只在FC环境变量中保存）
+- `PUBLIC_PROJECTS_PER_DAY=12`
+- `PUBLIC_RUNS_PER_HOUR=6`
+- `PUBLIC_MEDIA_PER_HOUR=3`
+- `PUBLIC_MAX_ACTIVE_JOBS=1`
+- `PUBLIC_MAX_QUEUED_JOBS=4`
 
-同源部署时`ALLOWED_ORIGINS`可填写最终函数URL；后端不需要把Key返回给前端。
+同源部署时`ALLOWED_ORIGINS`填写最终函数URL；后端不需要也不会把Key返回给前端。生产启动会校验真实千问模型、北京HTTPS端点、Key、绝对持久目录、签名密钥和队列参数，缺一项即停止启动。
 
 ## 费用控制
 
-1. 最小实例数必须保持0，避免无人访问时持续占用资源。
+1. 正式答辩和公开验收期间最小实例数设为1，避免后台视频任务因实例回收中断；展示结束后改为0。
 2. 不购买CU资源包，先使用试用额度或按量付费；低流量演示不需要预付费计划。
 3. FC官方计费说明指出：某函数在一个小时内有调用或持续资源使用时，若该小时折算费用低于0.01元，会按0.01元最低计费。因此“偶尔访问”的理论下限约为每个发生调用的小时0.01元，实际还要加模型、知识库、日志和外网流量费用。
 4. 部署后立即设置10元费用预警；沿用全项目70元暂停、100元上限。
@@ -55,18 +66,31 @@
 - FastAPI同源托管`frontend/dist`，未知`/api/*`不会错误回退到HTML。
 - 容器监听`0.0.0.0:9000`。
 - `.dockerignore`明确排除`.env`、日志、原始模型产物和本地评测资料。
-- 云端写入统一落到`/tmp`，避免只读目录错误；版本证据仍应在本地项目中归档。
+- 云端持久数据统一写入NAS挂载目录`/data`；临时磁盘只承载可丢弃的中间文件。
 - 健康检查地址：`/api/health`。
+- 容器保持单worker，监听`0.0.0.0:9000`，HTTP keep-alive设为900秒。
+- 公开模式自动签发HttpOnly/SameSite匿名会话；不同浏览器看不到彼此项目。
+- 公开模式关闭旧海报规划和本地太阳分镜接口，避免绕过工作台额度。
 
 ## 部署前仍需用户完成
 
 1. 在FC控制台确认是否可领取新用户CU试用额度。
 2. 选择“Funciton AI连接代码仓库自动构建”或“ACR镜像＋自定义容器”。当前电脑没有Docker，优先前者。
 3. 如果采用代码仓库，需要提供一个私有GitHub、Gitee、GitLab或Codeup仓库并在FC控制台授权连接；密钥只放FC环境变量。
-4. 创建函数前截图计费配置、最小实例数0和费用预警，作为预算与合规证据。
+4. 创建函数前截图计费配置、答辩期最小实例数1/最大实例数1、NAS挂载和费用预警，作为预算与合规证据。
 
 ## 官方依据
 
 - FC Web函数兼容Web框架、可按需扩缩，默认无流量时释放实例。
 - 自定义容器HTTP服务必须监听`0.0.0.0:CAPort`，默认端口9000。
-- FC支持试用额度、按量付费与资源包；本项目使用按量/试用，不预购资源包。
+- 自定义容器HTTP服务需支持至少15分钟请求超时/Keep-Alive，容器需在120秒内启动。
+- FC临时磁盘会随实例回收而清除；需长期保存的视频和项目应使用NAS或OSS，本项目首版采用NAS以保持现有SQLite/文件接口。
+- FC支持从GitHub等代码仓库持续部署；本项目使用私有GitHub仓库并由负责人在控制台授权。
+
+官方文档（部署日再次核对）：
+
+- https://help.aliyun.com/en/functioncompute/custom-container/
+- https://help.aliyun.com/en/functioncompute/web-function-quick-start
+- https://help.aliyun.com/en/nas/user-guide/use-function-compute-to-upload-or-download-files-over-the-internet
+- https://help.aliyun.com/en/functioncompute/selection-of-function-storage
+- https://help.aliyun.com/en/functioncompute/migrate-existing-web-projects-to-funciton-ai-to-realize-service-serverless-and-continuous-deployment

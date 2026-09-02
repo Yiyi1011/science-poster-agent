@@ -89,6 +89,16 @@ class Settings:
     budget_limit_cny: float = float(os.getenv("BUDGET_LIMIT_CNY", "100"))
     budget_pause_cny: float = float(os.getenv("BUDGET_PAUSE_CNY", "70"))
     runtime_data_dir: str = os.getenv("SCIENCE_POSTER_DATA_DIR", "")
+    # Public zero-configuration release. These values are configured once by
+    # the operator in the cloud; end users receive an anonymous signed session
+    # automatically and never see an API key or setup screen.
+    public_access_enabled: bool = _as_bool(os.getenv("PUBLIC_ACCESS_ENABLED"), False)
+    public_session_secret: str = os.getenv("PUBLIC_SESSION_SECRET", "")
+    public_projects_per_day: int = int(os.getenv("PUBLIC_PROJECTS_PER_DAY", "12"))
+    public_runs_per_hour: int = int(os.getenv("PUBLIC_RUNS_PER_HOUR", "6"))
+    public_media_per_hour: int = int(os.getenv("PUBLIC_MEDIA_PER_HOUR", "3"))
+    public_max_active_jobs: int = int(os.getenv("PUBLIC_MAX_ACTIVE_JOBS", "1"))
+    public_max_queued_jobs: int = int(os.getenv("PUBLIC_MAX_QUEUED_JOBS", "4"))
 
     def validate_for_real_ai(self) -> None:
         from app.services.model_policy import validate_model_policy
@@ -117,6 +127,27 @@ class Settings:
         self.validate_for_real_ai()
         if not self.qwen_vision_model:
             raise RuntimeError("QWEN_VISION_MODEL is missing.")
+
+    def validate_for_public_release(self) -> None:
+        """Fail closed before exposing a real-model build to anonymous users."""
+        if self.app_env != "production":
+            return
+        self.validate_for_real_ai()
+        if self.mock_ai:
+            raise RuntimeError("PUBLIC production release cannot run with MOCK_AI=true.")
+        if not self.public_access_enabled:
+            raise RuntimeError("PUBLIC_ACCESS_ENABLED=true is required for the public release.")
+        if len(self.public_session_secret) < 32:
+            raise RuntimeError("PUBLIC_SESSION_SECRET must contain at least 32 characters.")
+        if not self.runtime_data_dir or not Path(self.runtime_data_dir).is_absolute():
+            raise RuntimeError("SCIENCE_POSTER_DATA_DIR must be an absolute persistent path in production.")
+        if not (1 <= self.public_max_active_jobs <= 4):
+            raise RuntimeError("PUBLIC_MAX_ACTIVE_JOBS must be between 1 and 4.")
+        if self.public_max_queued_jobs < self.public_max_active_jobs:
+            raise RuntimeError("PUBLIC_MAX_QUEUED_JOBS cannot be smaller than active jobs.")
+        for value in (self.public_projects_per_day, self.public_runs_per_hour, self.public_media_per_hour):
+            if value < 1:
+                raise RuntimeError("Public usage limits must be positive integers.")
 
 
 settings = Settings()

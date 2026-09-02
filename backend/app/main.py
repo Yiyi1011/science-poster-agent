@@ -7,9 +7,10 @@ import asyncio
 from hashlib import sha256
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app):
     from app.services.studio_store import recover_interrupted_runs
     from app.studio_routes import tasks
+    settings.validate_for_public_release()
     recover_interrupted_runs()
     yield
     for task in list(tasks):
@@ -51,7 +53,7 @@ async def lifespan(app):
 
 app = FastAPI(
     title="Science Poster Agent API",
-    version="0.5.6-preview",
+    version="0.5.8-preview",
     lifespan=lifespan,
     description="Evidence-driven science poster planning API for the competition MVP.",
 )
@@ -64,9 +66,27 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def anonymous_public_session(request: Request, call_next):
+    from app.services.public_access import attach_cookie, session_for
+    session = session_for(request, settings)
+    request.state.scivis_session_id = session.session_id
+    # The final public UI uses only the source-isolated studio. Retired poster
+    # and local storyboard endpoints remain available to developers, but are
+    # closed in the anonymous production release so they cannot bypass quotas.
+    public_api = request.url.path.startswith("/api/")
+    allowed = request.url.path in {"/api/health", "/api/config/public"} or request.url.path.startswith("/api/studio/") or request.url.path == "/api/studio"
+    if settings.public_access_enabled and public_api and not allowed:
+        response = JSONResponse({"detail": "该旧版接口不在公开版本中"}, status_code=404)
+    else:
+        response = await call_next(request)
+    attach_cookie(response, session, settings)
+    return response
+
+
 @app.get("/api/health")
 async def health() -> dict[str, str | bool]:
-    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.5.6-preview",
+    return {"status": "ok", "mock_ai": settings.mock_ai, "region": settings.region, "service": "science-poster-agent", "version": "0.5.8-preview",
             "instance": sha256(str(Path(__file__).resolve().parents[2]).lower().encode()).hexdigest()[:16]}
 
 

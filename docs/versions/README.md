@@ -19,6 +19,7 @@
 | [process/v0.5.0-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.5.0-preview) | 通用闭环四题端到端：任意问题→检索→讲解→6—8镜→审核→AI旁白字幕→可播放MP4 | M1验收点；[变更和局限](process/v0.5.0-preview.md)；内容仍须人工试听与科学终审 |
 | [process/v0.5.1-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.5.1-preview) | 用户只提问题，千问自动补证据并默认生成视频；重复项目可恢复归档；Windows启动预检 | M1—M3制作候选；[变更、实测和局限](process/v0.5.1-preview.md)；仍非最终交付 |
 | [process/v0.5.6-preview](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.5.6-preview) | 权威资料恢复、水色7镜68秒真实成片、页面统一滚动、跨设备数据/证书/字体/容器候选 | 明日封装前检查点；[变更、实测和局限](process/v0.5.6-preview.md)；未创建final |
+| `process/v0.5.8-preview`（待推送标签） | 公网零配置候选：匿名会话隔离、透明额度、单实例队列、生产启动校验和NAS部署清单 | 云端部署前检查点；[变更、验证和局限](process/v0.5.8-preview.md)；未创建final |
 | [process/v0.4.5-handoff](https://github.com/Yiyi1011/science-poster-agent/tree/process/v0.4.5-handoff) | 下一阶段唯一执行说明：任意问题到视频、UI优化、Windows封装 | Claude＋DeepSeek接手入口；[执行说明](../NEXT_STAGE_EXECUTION_BRIEF.md)，功能沿用v0.4.4 |
 
 旧标签原样保留，不移动、不重写历史。以后制作里程碑统一用 `process/v版本号-preview`；每次标签对应一个明确的Git提交，而不是把所有历史文件复制到当前目录。

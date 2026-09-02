@@ -10,6 +10,10 @@ from uuid import uuid4
 from app.studio_models import ProjectInput
 
 
+class PublicQuotaExceeded(ValueError):
+    pass
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -40,7 +44,12 @@ def connection():
             PRIMARY KEY(project, number));
         CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, project TEXT, request TEXT, state TEXT,
             stage TEXT, error TEXT DEFAULT '', updated TEXT);
+        CREATE TABLE IF NOT EXISTS public_usage(session TEXT, window TEXT, action TEXT, count INTEGER NOT NULL,
+            updated TEXT NOT NULL, PRIMARY KEY(session, window, action));
     """)
+    columns = {row[1] for row in db.execute("PRAGMA table_info(projects)")}
+    if "owner" not in columns:
+        db.execute("ALTER TABLE projects ADD COLUMN owner TEXT NOT NULL DEFAULT 'local'")
     # Non-destructive migrations: preserve the original one-row snapshot as attempt 1.
     db.execute("""INSERT OR IGNORE INTO research_history(project,attempt,payload,created)
                   SELECT research.project,1,research.payload,COALESCE(projects.created,?)
@@ -56,29 +65,37 @@ def connection():
         db.close()
 
 
-def create_project(data: ProjectInput):
+def create_project(data: ProjectInput, owner: str = "local"):
     project_id = str(uuid4())
     with connection() as db:
-        db.execute("INSERT INTO projects VALUES(?,?,?)", (project_id, data.model_dump_json(), now()))
+        db.execute("INSERT INTO projects(id,input,created,owner) VALUES(?,?,?,?)",
+                   (project_id, data.model_dump_json(), now(), owner))
     return get_project(project_id)
 
 
-def list_projects():
+def list_projects(owner: str | None = None):
     with connection() as db:
-        rows = db.execute("""SELECT p.id,p.input,p.created,
+        where = "p.id NOT IN (SELECT project FROM project_archive)"
+        params: tuple = ()
+        if owner is not None:
+            where += " AND p.owner=?"
+            params = (owner,)
+        rows = db.execute(f"""SELECT p.id,p.input,p.created,
             EXISTS(SELECT 1 FROM media m WHERE m.project=p.id
                    AND json_extract(m.payload,'$.state')='succeeded'
                    AND json_extract(m.payload,'$.video') IS NOT NULL) AS has_video
-            FROM projects p WHERE p.id NOT IN (SELECT project FROM project_archive)
-            ORDER BY p.created DESC LIMIT 100""").fetchall()
+            FROM projects p WHERE {where}
+            ORDER BY p.created DESC LIMIT 100""", params).fetchall()
     return [{"id": r["id"], "topic": json.loads(r["input"])["topic"], "created_at": r["created"],
              "has_video": bool(r["has_video"])} for r in rows]
 
 
-def get_project(project_id):
+def get_project(project_id, owner: str | None = None):
     with connection() as db:
         row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
         if row is None:
+            raise KeyError("项目不存在")
+        if owner is not None and row["owner"] != owner:
             raise KeyError("项目不存在")
         versions = db.execute("SELECT payload FROM versions WHERE project=? ORDER BY number", (project_id,)).fetchall()
         runs = db.execute("SELECT id,state,stage,error,updated FROM runs WHERE project=? ORDER BY updated", (project_id,)).fetchall()
@@ -109,10 +126,11 @@ def append_research(project_id, payload):
     return attempt
 
 
-def archive_project(project_id, reason):
+def archive_project(project_id, reason, owner: str | None = None):
     """Remove a duplicate from normal listings while keeping it fully recoverable."""
     with connection() as db:
-        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+        row = db.execute("SELECT owner FROM projects WHERE id=?", (project_id,)).fetchone()
+        if not row or (owner is not None and row["owner"] != owner):
             raise KeyError("项目不存在")
         db.execute("INSERT OR REPLACE INTO project_archive VALUES(?,?,?)", (project_id, reason, now()))
 
@@ -130,7 +148,38 @@ def list_archived_projects():
              "reason": row["reason"], "archived_at": row["archived"]} for row in rows]
 
 
-def reserve(project_id, request):
+def consume_public_quota(session_id: str, action: str, window: str, limit: int) -> int:
+    """Atomically count a public action and reject before a paid job is reserved."""
+    with connection() as db:
+        db.execute("BEGIN IMMEDIATE")
+        count = _consume_public_quota(db, session_id, action, window, limit)
+    return count
+
+
+def _consume_public_quota(db, session_id: str, action: str, window: str, limit: int) -> int:
+    row = db.execute("SELECT count FROM public_usage WHERE session=? AND window=? AND action=?",
+                     (session_id, window, action)).fetchone()
+    count = int(row["count"]) if row else 0
+    if count >= limit:
+        raise PublicQuotaExceeded("本时段体验次数已用完，请稍后再试；已有项目和视频不会丢失")
+    count += 1
+    db.execute("""INSERT INTO public_usage(session,window,action,count,updated) VALUES(?,?,?,?,?)
+                  ON CONFLICT(session,window,action) DO UPDATE SET count=excluded.count,updated=excluded.updated""",
+               (session_id, window, action, count, now()))
+    return count
+
+
+def has_run_request(request_id) -> bool:
+    with connection() as db:
+        return bool(db.execute("SELECT 1 FROM runs WHERE id=?", (str(request_id),)).fetchone())
+
+
+def has_media_request(request_id) -> bool:
+    with connection() as db:
+        return bool(db.execute("SELECT 1 FROM media WHERE id=?", (str(request_id),)).fetchone())
+
+
+def reserve(project_id, request, public_quota: tuple[str, str, str, int] | None = None):
     """Exactly one in-flight call per project; retries don't silently rebill."""
     request_id = str(request.request_id)
     serialized = request.model_dump_json()
@@ -150,6 +199,8 @@ def reserve(project_id, request):
         version = db.execute("SELECT COALESCE(MAX(number),0) FROM versions WHERE project=?", (project_id,)).fetchone()[0]
         if version != request.expected_version:
             raise ValueError("项目已有新版本，请刷新后重试")
+        if public_quota:
+            _consume_public_quota(db, *public_quota)
         db.execute("INSERT INTO runs(id,project,request,state,stage,updated) VALUES(?,?,?,'running','准备资料',?)",
                    (request_id, project_id, serialized, now()))
     return True
@@ -181,7 +232,7 @@ def recover_interrupted_runs():
                 db.execute("UPDATE media SET payload=? WHERE id=?", (json.dumps(payload, ensure_ascii=False), row["id"]))
 
 
-def reserve_media(project_id, request):
+def reserve_media(project_id, request, public_quota: tuple[str, str, str, int] | None = None):
     with connection() as db:
         db.execute("BEGIN IMMEDIATE")
         existing = db.execute("SELECT project,version,payload FROM media WHERE id=?", (str(request.request_id),)).fetchone()
@@ -220,6 +271,8 @@ def reserve_media(project_id, request):
             needs_changes = any(h.get("status") == "needs_changes" for h in prior.get("human_reviews", []))
             if prior["state"] == "running" or (r["version"] == request.expected_version and prior["state"] == "succeeded" and not needs_changes and prior.get("renderer", "illustrated") == request.renderer):
                 raise ValueError("该版已有媒体或正在生成，不重复收费；请查看结果或先修改脚本")
+        if public_quota:
+            _consume_public_quota(db, *public_quota)
         payload = {"id": str(request.request_id), "version": request.expected_version, "state": "running", "stage": "准备卡通视频" if request.renderer == "cartoon" else "准备生成插画与有声预览",
                    "events": [], "scenes": [], "files": [], "created_at": now(), "renderer": request.renderer,
                    "proceeded_from_blocked": not eligible and request.proceed_from_blocked,
